@@ -90,7 +90,33 @@ In the real topology the token is produced by the **tier1-gateway**: it validate
 1. run `tier1-gateway` with a signing keypair and configure `identity-provider`'s verifier to trust its public key, and a Keycloak realm/user the gateway accepts; or
 2. locate/override the verifier's trusted public key to one you control and sign tokens with the matching private key.
 
-This is a further build increment (not wired here). Everything below the auth layer — enrollment, the CA, persistence — is proven via the applicant path.
+**Gateway layer (`04-gateways.sh`):** `tier1-gateway` (Spring Cloud Gateway) **builds and runs** here — it proxies `/auth/**` → Keycloak (verified: `/auth/realms/master` → 200) and **enforces OIDC auth on the backend routes** (`/identityApplicantApi/**` → 401 without a token, as designed). `tier2-gateway` builds. What remains for a *fully authenticated* call: Keycloak realms `authority`+`onboarding` with a client/user/roles, the Keycloak issuer aligned to the gateway's `/auth` path, and the backend verifier trusting the token's RS256 key (Tier‑2 additionally needs CA-issued X.509 client certs for mTLS). Everything below the auth layer — enrollment, the CA, persistence — is proven via the applicant path.
+
+## How this differs from the official Simpl-Open deployment
+
+Official Simpl-Open runs on **Kubernetes via Helm/ArgoCD**, one agent per namespace. This lab runs the **same service jars** as plain processes on one host. What's identical vs substituted:
+
+| Aspect | Official | This lab |
+|---|---|---|
+| Orchestration | Kubernetes (Helm/ArgoCD), per-agent namespaces | plain JVM processes on one host |
+| Service code | the Simpl jars | **same jars, built from source** ✅ |
+| Data-space connector | Eclipse EDC (Simpl fork) | **same** ✅ |
+| Contract negotiation + transfer (DSP) | real | **same, real** ✅ |
+| Databases | PostgreSQL, one per service | **real Postgres**, shared instance, multiple DBs |
+| Object storage | MinIO / S3 | **moto** (mock S3, real GET/PUT) |
+| X.509 CA | **EJBCA** (container) | **~180-line Go shim** (same `pkcs10enroll` REST contract) |
+| OIDC identity | Keycloak (behind gateway, EU Login/eID upstream) | **Keycloak 26** dev-mode (embedded H2) |
+| Tier-1 / Tier-2 gateways | enforce OIDC + mTLS | tier1 **runs + enforces auth**; tier2 built (mTLS not wired) |
+| Inter-agent trust | Tier-2 mTLS with CA-issued certs | connectors use Simpl's **built-in dev identity mock** |
+| Async messaging | Kafka | not run (adapter boots without it) |
+| Secrets | HashiCorp Vault | not used (dev config) |
+| Federated Catalogue (Gaia-X XFSC) | deployed | code present/built; not run in the transfer path |
+
+**Bottom line:** the *application and data-space layers are the real thing* (real jars, real EDC/DSP, real Postgres, real transfer, real X.509 issuance). The *platform/trust hardening* — EJBCA PKI, full mTLS between agents, Vault, Kafka, and the Helm-orchestrated multi-namespace topology — is substituted or simplified. Functionally equivalent for exercising and debugging the code; not a production-grade secure deployment.
+
+## Resource footprint (this whole lab, at rest)
+
+~3 GB RAM total, near-zero CPU when idle (event-driven services). Per component (RSS): identity-provider ~540 MB, Keycloak ~530 MB, edc-connector-adapter ~380 MB, validation-be ~370 MB, contract-consumption-be ~320 MB, each EDC connector ~270–300 MB, Postgres ~400 MB (all backends), moto ~75 MB, the Go CA shim **~10 MB**. Fits comfortably on a 4-core / 8 GB box; add the gateways (~2× ~350 MB) for the full IAA edge.
 - **Not wired into one mesh**: tier1/tier2 gateways, tier2-proxy, onboarding UI, and the authority's own connector+catalogue all *compile* but aren't composed here.
 - **Kafka** is not started; `edc-connector-adapter` boots without it (async transfer-status polling is inert).
 
