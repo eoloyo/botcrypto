@@ -80,7 +80,17 @@ It's a ~180-line Go program (`ejbca-shim/main.go`, stdlib only) that generates a
 
 - **Substitutes**: EJBCA → the Go shim; MinIO → `moto` (mock S3, real GET/PUT). Both faithful to the APIs Simpl uses, but not the production software.
 - **Identity mock**: the EDC connectors use Simpl's *own* built-in dev identity mock (`mocked.agent.identity.attributes`) for the transfer — the full Tier‑2 mTLS trust between agents is not exercised there.
-- **Auth**: the GA enrollment uses `identity-provider`'s unauthenticated applicant path (`NotAuthenticated`); read endpoints need a Keycloak JWT (Keycloak runs, but realm/roles for reads aren't wired here — see `TODO`).
+- **Auth**: the GA enrollment uses `identity-provider`'s unauthenticated applicant path (`NotAuthenticated`), which already drives the full CSR→CA→credential loop. The *authenticated* Tier‑1 endpoints (e.g. reading a credential) are **RSA-signature-verified** — see "Authenticated Tier‑1 flow" below.
+
+## Authenticated Tier-1 flow (the next increment)
+
+The Tier‑1 auth is handled by `AuthServiceImpl` in `simpl-spring-boot-starter` (pkg `eu.europa.ec.simpl.common.security`). It reads the `Authorization: Bearer` token and verifies it with `TierOneAuthInfoRSAVerifier` — i.e. it **checks the RSA signature**, not just the claims. A hand-crafted token is rejected with `401 "Invalid JWT token"` (verified).
+
+In the real topology the token is produced by the **tier1-gateway**: it validates the external **Keycloak** OIDC token, then issues an internal Tier‑1 token signed with a key the backends trust. So to exercise the authenticated endpoints locally you need either:
+1. run `tier1-gateway` with a signing keypair and configure `identity-provider`'s verifier to trust its public key, and a Keycloak realm/user the gateway accepts; or
+2. locate/override the verifier's trusted public key to one you control and sign tokens with the matching private key.
+
+This is a further build increment (not wired here). Everything below the auth layer — enrollment, the CA, persistence — is proven via the applicant path.
 - **Not wired into one mesh**: tier1/tier2 gateways, tier2-proxy, onboarding UI, and the authority's own connector+catalogue all *compile* but aren't composed here.
 - **Kafka** is not started; `edc-connector-adapter` boots without it (async transfer-status polling is inert).
 
