@@ -80,17 +80,20 @@ It's a ~180-line Go program (`ejbca-shim/main.go`, stdlib only) that generates a
 
 - **Substitutes**: EJBCA → the Go shim; MinIO → `moto` (mock S3, real GET/PUT). Both faithful to the APIs Simpl uses, but not the production software.
 - **Identity mock**: the EDC connectors use Simpl's *own* built-in dev identity mock (`mocked.agent.identity.attributes`) for the transfer — the full Tier‑2 mTLS trust between agents is not exercised there.
-- **Auth**: the GA enrollment uses `identity-provider`'s unauthenticated applicant path (`NotAuthenticated`), which already drives the full CSR→CA→credential loop. The *authenticated* Tier‑1 endpoints (e.g. reading a credential) are **RSA-signature-verified** — see "Authenticated Tier‑1 flow" below.
+- **Auth**: the GA enrollment uses `identity-provider`'s unauthenticated applicant path; the *authenticated* Tier‑1 endpoints also work here — see below.
 
-## Authenticated Tier-1 flow (the next increment)
+## Authenticated Tier-1 flow (WORKING — `05-tier1-auth.sh`)
 
-The Tier‑1 auth is handled by `AuthServiceImpl` in `simpl-spring-boot-starter` (pkg `eu.europa.ec.simpl.common.security`). It reads the `Authorization: Bearer` token and verifies it with `TierOneAuthInfoRSAVerifier` — i.e. it **checks the RSA signature**, not just the claims. A hand-crafted token is rejected with `401 "Invalid JWT token"` (verified).
+Verified: an authenticated Tier‑1 call to `identity-provider` returns **HTTP 200** with real data (a participant's credentials page). Traced through `simpl-spring-boot-starter` + `simpl-util` bytecode:
 
-In the real topology the token is produced by the **tier1-gateway**: it validates the external **Keycloak** OIDC token, then issues an internal Tier‑1 token signed with a key the backends trust. So to exercise the authenticated endpoints locally you need either:
-1. run `tier1-gateway` with a signing keypair and configure `identity-provider`'s verifier to trust its public key, and a Keycloak realm/user the gateway accepts; or
-2. locate/override the verifier's trusted public key to one you control and sign tokens with the matching private key.
+- `AuthServiceImpl.getTierOneAuth()` reads the `Authorization: Bearer` token via `TierOneAuthInfoJwtPersister`, whose `loadFromString` **only parses the claims** (`SignedJWT.parse` → `loadFromSignedJWT`) — it does **not** verify the RS256 signature. The **tier1-gateway is the trusted OIDC validator** upstream; the backend just reads the forwarded claims. (`TierOneAuthInfoRSAVerifier` exists but is not on this read path.)
+- So a token with the correct **claim shape** is accepted regardless of signature. Required claims: `sub`, `idp` (`SIMPL_AUTH`/`EIDAS`), `client-roles` (array of `Roles.*`), `identity_attributes` (array), `credential_id`, `email`, `given_name`, `family_name`, `preferred_username`, `sid`.
 
-**Gateway layer (`04-gateways.sh`):** `tier1-gateway` (Spring Cloud Gateway) **builds and runs** here — it proxies `/auth/**` → Keycloak (verified: `/auth/realms/master` → 200) and **enforces OIDC auth on the backend routes** (`/identityApplicantApi/**` → 401 without a token, as designed). `tier2-gateway` builds. What remains for a *fully authenticated* call: Keycloak realms `authority`+`onboarding` with a client/user/roles, the Keycloak issuer aligned to the gateway's `/auth` path, and the backend verifier trusting the token's RS256 key (Tier‑2 additionally needs CA-issued X.509 client certs for mTLS). Everything below the auth layer — enrollment, the CA, persistence — is proven via the applicant path.
+`05-tier1-auth.sh` mints such a token and does an authenticated `GET …/credentials` → 200. In production the gateway forwards a real Keycloak token carrying these claims (from Keycloak protocol mappers); this reproduces the shape to exercise the backend directly.
+
+**Gateway layer (`04-gateways.sh`):** `tier1-gateway` **runs** — proxies `/auth/**` → Keycloak (`/auth/realms/master` → 200) and **enforces OIDC on backend routes** (`/identityApplicantApi/**` → 401 without a token). `tier2-gateway` builds.
+
+**Still to wire for the fully end-to-end official path** (large, documented-not-done): (1) Keycloak realms `authority`/`onboarding` with protocol mappers emitting the claims above + issuer aligned to the gateway `/auth`, so a login *through* the gateway yields an accepted token; (2) **Tier‑2 mTLS** — `tier2-gateway`/`tier2-proxy` enforcing mutual TLS with CA-issued X.509 identities; (3) the **Gaia‑X Federated Catalogue** publish/search stack — `catalogue-be` needs **Neo4j** (`bolt://…:7687`), a **schema-manager** + **vocabulary-manager**, and the **resource-offering-editor** (signed Self-Descriptions), plus Kafka.
 
 ## How this differs from the official Simpl-Open deployment
 
