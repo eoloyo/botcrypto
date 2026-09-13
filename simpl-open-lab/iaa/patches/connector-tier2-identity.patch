@@ -1,0 +1,66 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/iam/service/IamExtension.java b/src/main/java/eu/europa/ec/simpl/iam/service/IamExtension.java
+index d3de019..dd1a425 100644
+--- a/src/main/java/eu/europa/ec/simpl/iam/service/IamExtension.java
++++ b/src/main/java/eu/europa/ec/simpl/iam/service/IamExtension.java
+@@ -48,6 +48,9 @@ public class IamExtension implements ServiceExtension {
+                         .decode(context.getSetting("mocked.agent.identity.attributes", "")), StandardCharsets.UTF_8))
+                 .monitor(context.getMonitor())
+                 .authenticationProviderUrl(context.getSetting("client.authenticationprovider.url", ""))
++                // Tier-1 bearer token identifying THIS agent's participant, so the auth provider
++                // resolves and returns the agent's OWN governed attributes (see SimplIdentityService).
++                .authenticationProviderToken(context.getSetting("client.authenticationprovider.token", ""))
+                 .build();
+ 
+         context.registerService(IdentityService.class,
+@@ -67,5 +70,6 @@ public class IamExtension implements ServiceExtension {
+         private final String mockedAgentIdentityAttributes;
+         private final Monitor monitor;
+         private final String authenticationProviderUrl;
++        private final String authenticationProviderToken;
+     }
+ }
+diff --git a/src/main/java/eu/europa/ec/simpl/iam/service/SimplIdentityService.java b/src/main/java/eu/europa/ec/simpl/iam/service/SimplIdentityService.java
+index c534755..2a5409d 100644
+--- a/src/main/java/eu/europa/ec/simpl/iam/service/SimplIdentityService.java
++++ b/src/main/java/eu/europa/ec/simpl/iam/service/SimplIdentityService.java
+@@ -110,19 +110,33 @@ public class SimplIdentityService implements IdentityService {
+ 
+     @SneakyThrows
+     private  List<AgentIdentityAttribute> getIdentityAttributesFromAuthenticationProvider() {
+-
+-        final var url = extensionContext.getAuthenticationProviderUrl() + "/identityAttributes?pageSize=10000";
+-        final var request = new Request.Builder().get().url(url).build();
+-        try (final var response = client.newCall(request).execute()) {
++        // Production behaviour: fetch THIS agent's OWN governed identity attributes, not the
++        // whole dataspace catalogue. GET /tier1/v2/participant/identityAttributes
++        // (getAgentParticipantIdentityAttributes) returns a JSON ARRAY of the participant linked
++        // to the agent where this connector is deployed; the auth provider resolves the caller
++        // from the Tier-1 bearer token and fetches the assignments from the Governance Authority.
++        // We keep only the attributes actually assigned to the participant so ABAC (e.g. the
++        // consumption constraint) is evaluated on the agent's real entitlements.
++        final var url = extensionContext.getAuthenticationProviderUrl() + "/participant/identityAttributes";
++        final var builder = new Request.Builder().get().url(url);
++        final var token = extensionContext.getAuthenticationProviderToken();
++        if (token != null && !token.isBlank()) {
++            builder.header("Authorization", "Bearer " + token);
++        }
++        try (final var response = client.newCall(builder.build()).execute()) {
+             final var responseBody = Objects.requireNonNull(response.body()).string();
+             if(!response.isSuccessful()) {
+                 extensionContext.getMonitor()
+                         .debug("SimplIdentityService::getIdentityAttributesFromAuthenticationProvider "
+                                 + "-> unsuccessful call to auth provider. Returned body: " + responseBody);
++                return List.of();
+             }
+-            final var jsonNode = typeManager.getMapper().readTree(responseBody);
+-            final var itemsNode = jsonNode.get("items").toString();
+-            return typeManager.readValue(itemsNode, new TypeReference<>() {});
++            // The endpoint returns a bare array of IdentityAttribute (see AgentIdentityAttribute).
++            final List<AgentIdentityAttribute> all =
++                    typeManager.readValue(responseBody, new TypeReference<List<AgentIdentityAttribute>>() {});
++            return all.stream()
++                    .filter(AgentIdentityAttribute::isAssignedToParticipant)
++                    .toList();
+         }
+     }
+ }
