@@ -62,6 +62,16 @@ wizard, the signer, and the mTLS gate that make it a *provider-agent* action.
 
 ## Status in this lab
 
+> **ACHIEVED — a provider agent published a Self-Description through the full Tier-2
+> mTLS mesh.** `POST /v1/selfDescriptions/publications` on `sd-tooling-be` →
+> `FederatedCatalogueTier2Client` → **tier2-gateway (mTLS, client identity resolved
+> from the provider's CA-issued credential, ABAC)** → `/fc` → `fc-service`, ending with
+> the SD `active` in `fc-service` (`GET :8081/self-descriptions` → `totalCount: 1`).
+> Reproduced by `scripts/07-tier2-provider-publish.sh` + `iaa/enroll.sh` +
+> `iaa/{jwks-tier1.py,ocsp-responder.py}` + the two local patches
+> (`iaa/patches/tier2-gateway-local-trust.patch`, `catalogue/patches/catalogue-local.patch`)
+> + the enhanced `ejbca-shim`.
+
 | Piece | State |
 |---|---|
 | `sd-tooling-be` (real publisher) | **builds + boots**; drives publish to `{tier2-gateway}/fc/self-descriptions` via the Tier-2 client (verified — fails only at Tier-2 client creation, no IAA present) |
@@ -72,9 +82,10 @@ wizard, the signer, and the mTLS gate that make it a *provider-agent* action.
 | provider keypair + CSR | **created** via `POST /tier1/v2/keypairs` + `/csr` |
 | CA enrollment (AIA + caIssuers + OCSP) | **works** — the Go shim now issues certs with AIA, serves the CA cert at the caIssuers URL, and runs an OCSP responder (`iaa/ocsp-responder.py`, GOOD + verbatim critical nonce + SHA256 certID) |
 | provider credential local validation | **passes** (chain build + OCSP GOOD + nonce all green) |
-| security-attributes-provider (SAP token) | source present, not yet run |
-| tier2-gateway (mTLS termination + CRL) | source present; mTLS not yet wired |
-| Governance Authority (authority-side IAA) | **not run** — this is the final blocker |
+| security-attributes-provider (SAP token) | **builds + runs** (:8102) — needed by the GA's ephemeral-proof generation |
+| tier2-gateway (mTLS termination) | **runs (:8443), mTLS working** — server identity from the GA credential; trusts the shim CA via `tier2-gateway-local-trust.patch` (upstream `loadTrustedCertificates()` is a TODO stub); routes `/authApi`,`/identityApi`,`/sapApi`,`/fc` |
+| Governance Authority (authority-side IAA) | **runs (:8105, authority profile) with its own active credential** — the root of trust; participant credential registers with it through the gateway mTLS |
+| **provider-agent publish through the mesh** | **GREEN** — SD `active` in fc-service via the full Tier-2 path |
 
 ### How far the Tier-2 machine-identity path goes locally (verified, step by step)
 
