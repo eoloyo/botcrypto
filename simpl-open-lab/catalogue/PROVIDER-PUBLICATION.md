@@ -77,6 +77,33 @@ what joins them:
 of the catalogue SD (never hardcoded), then negotiates + transfers against it, ending with the
 file in `consumer-bucket`. So `serviceAccessPoint` is the **discovery→transfer bridge**.
 
+### Consumption is gated too (the design ≠ what the lab enforces)
+
+The Tier-2 machine-identity perimeter governs the **consume/read** path, not just publish —
+consumption is **not open** in the real design:
+
+- **Inter-agent traffic is mTLS-only through the gateway.** `tier2-gateway/README.md`: *"a
+  gateway for inbound Tier 2 API operation **between agents** and work only in https on
+  mTLS."* A consumer reaching a provider's catalogue/connector goes through that perimeter;
+  `fc-service` has no app-level security precisely *because* the gateway is the perimeter.
+- **Identity attributes authorize consumption actions (ABAC).** The Tier-2 identity a
+  connector presents carries attributes that gate *what a consumer may do*. Straight from the
+  connector config (`connector-be/local/*-config.properties` → `mocked.agent.identity.attributes`):
+  - `DATA_SEARCHER` — *"act only as a searcher in the catalogue, **but can't start a contract
+    negotiation or transfer process**"*
+  - `CONSUMER` — act as a data-consumer participant user.
+  So a machine identity can be allowed to **discover** yet denied **negotiate/transfer**.
+
+**What this lab actually enforces (the simplification, be honest):** the E2E in `08` does
+**not** enforce that gate. It (1) queries `fc-service` **directly**, bypassing the gateway
+perimeter, and (2) uses the reference `basic-connector`, whose `SimplIdentityService`
+`verifyJwtToken` is a **non-verifying stub** (it deserializes the token and trusts it — no
+signature, no OCSP, no mTLS), with identity attributes **mocked** via a base64 config setting.
+So in the lab, anyone who can reach the ports can consume — a reference-implementation/dev
+shortcut, **not** the architecture. Making the lab enforce it means routing the consumer's
+catalogue query through the Tier-2 gateway and replacing the connector's mocked identity with
+auth-provider-issued attributes plus an EDC policy that denies negotiation to `DATA_SEARCHER`.
+
 ## Status in this lab
 
 > **ACHIEVED — a provider agent published a Self-Description through the full Tier-2

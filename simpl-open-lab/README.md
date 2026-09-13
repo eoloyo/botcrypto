@@ -67,6 +67,13 @@ provider** — joining the two discovery layers the other scripts run separately
 3. **Verified:** `example-s3.txt` lands in `consumer-bucket` (the consumer-bucket is cleared
    first, so the result is attributable to this catalogue-driven transfer).
 
+> **Consumption is gated in the real design** (this demo doesn't enforce it). Inter-agent
+> calls go through the Tier-2 gateway (mTLS-only) and identity attributes authorize the
+> action — a `DATA_SEARCHER` identity can *search* but is denied *negotiate/transfer*, a
+> `CONSUMER` can transact. The lab queries `fc-service` directly and uses the basic-connector's
+> non-verifying/mocked identity, so consumption here is open — a shortcut, not the architecture.
+> See [catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md) → "Consumption is gated too".
+
 `08` is idempotent and brings up its own prerequisites: if the catalogue is empty it runs
 `07` (or you can seed it faster with `06`), and it builds `connector-be` + runs `02` for the
 EDC dataspace. Prereqs beyond those: the moto venv from `01-setup.sh` (S3 mock).

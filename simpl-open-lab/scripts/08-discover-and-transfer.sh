@@ -17,6 +17,16 @@
 # which names the provider connector's DSP endpoint ($PROVIDER_DSP). The consumer never
 # hardcodes that endpoint — it reads it from the catalogue.
 #
+# SECURITY NOTE — this demo does NOT enforce consumption gating (the real design does):
+# In real Simpl-Open, consumption is gated by the Tier-2 machine-identity perimeter — the
+# consumer reaches the catalogue through its Tier-2 gateway (mTLS-only, between agents) and
+# presents a verified machine identity whose attributes authorize the action (e.g. a
+# DATA_SEARCHER identity may search the catalogue but is DENIED contract negotiation/transfer;
+# a CONSUMER identity may transact). This lab omits that gate: it queries fc-service directly
+# (bypassing the gateway) and uses the basic-connector's non-verifying SimplIdentityService
+# with mocked identity attributes. So "anyone can consume" here is a lab shortcut, not the
+# design. See catalogue/PROVIDER-PUBLICATION.md → "Consumption is gated too".
+#
 # Prereqs are handled here (idempotent): if the catalogue has no SD it runs 07 (which
 # clones+builds the mesh and publishes through the Tier-2 mTLS path, itself running 06);
 # it builds connector-be if missing and runs 02 to bring up the EDC dataspace.
