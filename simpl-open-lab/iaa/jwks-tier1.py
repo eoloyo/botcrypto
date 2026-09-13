@@ -22,7 +22,26 @@ key = load_or_make_key()
 pub = key.public_key().public_numbers()
 def b64u(n): 
     b = n.to_bytes((n.bit_length()+7)//8, 'big'); return base64.urlsafe_b64encode(b).rstrip(b'=').decode()
-JWKS = {"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":KID,"n":b64u(pub.n),"e":b64u(pub.e)}]}
+
+# The Simpl OIDC adapter reads the tier-one signature key from the JWK's x5c
+# (cert chain), so wrap the RSA public key in a self-signed cert and publish x5c.
+def _x5c():
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.serialization import Encoding
+    import datetime
+    subj = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "simpl-tier1-oidc")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(subj).issuer_name(subj)
+            .public_key(key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(minutes=5))
+            .not_valid_after(now + datetime.timedelta(days=3650))
+            .sign(key, hashes.SHA256()))
+    return base64.b64encode(cert.public_bytes(Encoding.DER)).decode()
+
+JWKS = {"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":KID,
+                 "n":b64u(pub.n),"e":b64u(pub.e),"x5c":[_x5c()]}]}
 
 def mint(pid, cid=None):
     now=int(time.time())
