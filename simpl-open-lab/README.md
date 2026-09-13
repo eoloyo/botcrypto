@@ -93,7 +93,22 @@ Verified: an authenticated Tier‑1 call to `identity-provider` returns **HTTP 2
 
 **Gateway layer (`04-gateways.sh`):** `tier1-gateway` **runs** — proxies `/auth/**` → Keycloak (`/auth/realms/master` → 200) and **enforces OIDC on backend routes** (`/identityApplicantApi/**` → 401 without a token). `tier2-gateway` builds.
 
-**Still to wire for the fully end-to-end official path** (large, documented-not-done): (1) Keycloak realms `authority`/`onboarding` with protocol mappers emitting the claims above + issuer aligned to the gateway `/auth`, so a login *through* the gateway yields an accepted token; (2) **Tier‑2 mTLS** — `tier2-gateway`/`tier2-proxy` enforcing mutual TLS with CA-issued X.509 identities; (3) the **Gaia‑X Federated Catalogue** publish/search stack — `catalogue-be` needs **Neo4j** (`bolt://…:7687`), a **schema-manager** + **vocabulary-manager**, and the **resource-offering-editor** (signed Self-Descriptions), plus Kafka.
+**Still to wire for the fully end-to-end official path**: (1) Keycloak realms `authority`/`onboarding` with protocol mappers emitting the claims above + issuer aligned to the gateway `/auth`, so a login *through* the gateway yields an accepted token; (2) **Tier‑2 mTLS** — `tier2-gateway`/`tier2-proxy` enforcing mutual TLS with CA-issued X.509 identities.
+
+## Gaia-X Federated Catalogue (RUNNING — `06-federated-catalogue.sh`)
+
+The GA-hosted rich catalog (`catalogue-be`, Java pkg `eu.xfsc.fc`, the Gaia-X **XFSC** Federation Catalogue) **boots and runs here**:
+
+- **Neo4j 5.26 + neosemantics (n10s) + APOC** downloaded, configured, and running (bolt :7687) — the RDF graph store for Self-Descriptions. (61 plugin procedures verified.)
+- **catalogue-be up on :8081** against Neo4j + PostgreSQL (Liquibase-migrated). Verified:
+  - `GET /schemas` → lists loaded ontologies (gaia-x core, trust-framework) + shapes
+  - `POST /schemas` → loads SHACL shapes/ontologies (verified: loaded the Simpl `http://w3id.org/gaia-x/simpl#` ontology + `simpl:DataOffering` shape)
+  - `GET /self-descriptions`, `/selfDescriptions/quickSearch`, `POST /query` → discovery (empty catalog returns `{"totalCount":0}`)
+  - The SHACL **verification pipeline is active** (it validates posted SDs against loaded shapes).
+
+**Publication requirement (the remaining dependency).** `POST /self-descriptions` runs the real validation: it needs (a) the `simpl#` ontology loaded ✓, (b) the offering's SHACL shape loaded ✓, and (c) the provider's **named data schema** resolvable via `schemasDao.selectByName(<dct:conformsTo.dct:schemaName>)` — e.g. `"DataSchema"`. That named schema is a **schema-manager** artifact tied to the specific offering (the catalogue's own unit tests insert it directly into the schema store). So a real SD publication additionally needs **schema-manager** wired to assemble+register those named schemas, plus the **resource-offering-editor** to build a conformant SD. Everything up to that point — the catalogue, the RDF store, SHACL validation, schema loading, and search — runs and is verified here.
+
+> Note: **publish → search → consume is already demonstrated end-to-end at the Eclipse EDC / Dataspace-Protocol level** (`02-dataspace.sh`: provider publishes an asset+contract-definition, consumer queries the catalog and negotiates, a file is transferred). The Federated Catalogue above is the *richer Gaia-X SD catalog* layered on top.
 
 ## How this differs from the official Simpl-Open deployment
 
