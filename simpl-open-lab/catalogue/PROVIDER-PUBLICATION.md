@@ -67,12 +67,40 @@ wizard, the signer, and the mTLS gate that make it a *provider-agent* action.
 | `sd-tooling-be` (real publisher) | **builds + boots**; drives publish to `{tier2-gateway}/fc/self-descriptions` via the Tier-2 client (verified — fails only at Tier-2 client creation, no IAA present) |
 | VC Issuer / signer | container-only image upstream; substitutable by a local issuer stub (signature verify is off in fc-service) |
 | `fc-service` (catalogue) | **runs**; publishes a Tier-A SD, graph + query working (see `06-federated-catalogue.sh`) |
-| authentication-provider (Tier-2 ephemeral-proof) | source present; needs Redis + Postgres(migrated) + Kafka/Vault config + CA |
-| security-attributes-provider (SAP token) | source present |
+| `authentication_provider` (participant side) | **builds + BOOTS** (Redis + Postgres/Liquibase; profile `local-consumer`=participant; Kafka autoconfig kept, broker lazy) |
+| Tier-1 OIDC signing authority | **`iaa/jwks-tier1.py`** — local JWKS + RS256 tokens **accepted** by auth-provider (`TierOneAuthInfoRSAVerifier`) |
+| provider keypair + CSR | **created** via `POST /tier1/v2/keypairs` + `/csr` |
+| CA enrollment (AIA + caIssuers + OCSP) | **works** — the Go shim now issues certs with AIA, serves the CA cert at the caIssuers URL, and runs an OCSP responder (`iaa/ocsp-responder.py`, GOOD + verbatim critical nonce + SHA256 certID) |
+| provider credential local validation | **passes** (chain build + OCSP GOOD + nonce all green) |
+| security-attributes-provider (SAP token) | source present, not yet run |
 | tier2-gateway (mTLS termination + CRL) | source present; mTLS not yet wired |
-| provider Tier-2 X.509 identity | issuable via the Go CA shim |
+| Governance Authority (authority-side IAA) | **not run** — this is the final blocker |
 
-The remaining work to publish **the exact intended way** is standing up the Tier-2
-machine-identity subsystem (authentication-provider + SAP + tier2-gateway with real
-mTLS and a CA-issued provider cert) — the deepest, most interconnected part of Simpl,
-and the same trust-hardening layer the lab otherwise substitutes.
+### How far the Tier-2 machine-identity path goes locally (verified, step by step)
+
+The participant side is reproduced end to end:
+
+1. `authentication_provider` boots against local Redis + PostgreSQL (Liquibase-migrated),
+   under the `participant` profile (`--spring.profiles.active=local-consumer`).
+2. A **local Tier-1 OIDC authority** (`iaa/jwks-tier1.py`) serves a JWKS and mints
+   RS256 tokens; auth-provider RS256-verifies them and authenticates the caller.
+3. `POST /tier1/v2/keypairs` creates the provider keypair (ECDSA); `POST .../{id}/csr`
+   generates a CSR (CN = the participant UUID — the install parses CN as the participant id).
+4. The **Go CA shim** signs the CSR. To satisfy Simpl's credential validation the shim
+   now: adds an **AIA** extension, serves its **CA cert at the caIssuers URL**, and runs
+   an **OCSP responder** that returns `GOOD`, echoes the request's **critical nonce
+   verbatim**, and uses a **SHA-256 certID** (all three were required, discovered in order).
+5. `POST /tier1/v2/credentials` then passes local validation completely
+   (chain → CA cert via AIA → OCSP GOOD + nonce match).
+
+**The final blocker** is not the participant side: after local validation succeeds,
+`CredentialControllerTier1V2` calls the **Governance Authority** over Tier-2 mTLS to
+register the credential ("Unable to communicate the new credential to Governance
+Authority", HTTP 503). The install is transactional, so with no GA online it rolls
+back and no credential is stored. Completing it therefore requires the **authority-side
+IAA** (a second `authentication_provider` in the `authority` profile, the GA's own
+CA-issued identity) reachable through the **tier2-gateway with real mTLS** — i.e. the
+full two-sided trust fabric, plus SAP for `/sapApi/tier2/v2/token`. That is the
+platform/trust-hardening layer the lab otherwise substitutes; everything up to the
+GA handshake is real and reproducible via `07-tier2-provider-publish.sh` +
+`iaa/jwks-tier1.py` + `iaa/ocsp-responder.py` + the enhanced `ejbca-shim`.

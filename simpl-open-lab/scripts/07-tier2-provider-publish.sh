@@ -16,12 +16,26 @@
 #   [OK]   authentication_provider boots (Liquibase-migrated, participant profile)
 #   [OK]   sd-tooling-be (the real publisher) boots and drives the publish to
 #          exactly {tier2-gateway}/fc/self-descriptions via the Tier-2 client
-#   [TODO] Tier-1 OIDC signing authority (local JWKS) so auth-provider accepts a
-#          Tier-1 token (it RS256-verifies against open-id-connect.certs-endpoint)
-#   [TODO] enroll a provider Tier-2 X.509 credential via the Go CA shim + install it
+#   [OK]   Tier-1 OIDC signing authority: iaa/jwks-tier1.py — auth-provider accepts
+#          its RS256 tokens (TierOneAuthInfoRSAVerifier, JWKS at certs-endpoint)
+#   [OK]   provider keypair + CSR via /tier1/v2/keypairs (+ /csr)
+#   [OK]   CA enrollment: the Go shim issues certs with AIA, serves the CA cert at
+#          the caIssuers URL, and runs an OCSP responder (iaa/ocsp-responder.py:
+#          GOOD + verbatim critical nonce + SHA256 certID). Local credential
+#          validation on POST /tier1/v2/credentials PASSES.
+#   [BLOCKED] credential install then calls the Governance Authority over Tier-2
+#          mTLS to register the credential (503, tx rolls back). Needs the
+#          authority-side IAA + tier2-gateway mTLS + SAP — the two-sided trust
+#          fabric. See catalogue/PROVIDER-PUBLICATION.md for the full analysis.
+#   [TODO] authority-side authentication_provider (authority profile) as the GA
 #   [TODO] security-attributes-provider (SAP) for /sapApi/tier2/v2/token
 #   [TODO] tier2-gateway: mTLS termination + route /fc,/authApi,/sapApi,/identityApi
 #   [TODO] point sd-tooling-be at the gateway and publish through the full path
+#
+# The participant-side enrollment (all [OK] above) is reproduced by:
+#   iaa/jwks-tier1.py  (Tier-1 tokens) + iaa/ocsp-responder.py + the ejbca-shim,
+#   then: create keypair -> generate CSR (CN = participant UUID) -> shim pkcs10enroll
+#   -> POST /tier1/v2/credentials (validation passes; GA registration is the wall).
 source "$(dirname "$0")/env.sh"
 RUN="$LAB_ROOT/run"; mkdir -p "$RUN"
 IAA="$LAB_ROOT/src/iaa"
