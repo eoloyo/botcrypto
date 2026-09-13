@@ -29,9 +29,19 @@
 #          fabric. See catalogue/PROVIDER-PUBLICATION.md for the full analysis.
 #   [OK]   authority-side authentication_provider (authority profile) as the GA:
 #          boots on :8105, own DB (authority_authprovider), profile local-authority
+#   [OK]   tier2-gateway (Spring Cloud Gateway) boots on :8443 and ENFORCES mTLS
+#          (rejects no-client-cert). routes-authority.yml routes /identityApi,
+#          /authApi, /sapApi to the backends; global filters EphemeralProof ->
+#          OCSP -> Headers -> ABAC.
+#   [TODO] point the gateway client-truststore at the CA shim; onboard the
+#          participant in the GA; satisfy the ephemeral-proof + ABAC filters so
+#          the credential registration passes through the mTLS mesh
 #   [TODO] security-attributes-provider (SAP) for /sapApi/tier2/v2/token
-#   [TODO] tier2-gateway: mTLS termination + route /fc,/authApi,/sapApi,/identityApi
 #   [TODO] point sd-tooling-be at the gateway and publish through the full path
+#
+# FULL MESH now boots: fc-service, participant auth_provider (:8104), GA
+# auth_provider (:8105), tier2-gateway (:8443 mTLS), sd-tooling-be (:8090),
+# + jwks/ocsp/ca-shim/redis. The remaining work is mesh trust-wiring, not builds.
 #
 # The participant-side enrollment (all [OK] above) is reproduced by:
 #   iaa/jwks-tier1.py  (Tier-1 tokens) + iaa/ocsp-responder.py + the ejbca-shim,
