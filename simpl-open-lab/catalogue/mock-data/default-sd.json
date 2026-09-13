@@ -60,7 +60,7 @@
       "simpl:name": "aefaf",
       "simpl:serviceAccessPoint": {
         "@type": "xsd:anyURI",
-        "@value": "https://creation.com"
+        "@value": "http://localhost:19194/protocol"
       }
     },
     "simpl:offeringPrice": {

@@ -1,0 +1,10 @@
+# Build artifacts produced by the scripts at run time — intentionally not tracked.
+# The multi-GB Simpl sources + jars live under $LAB_ROOT (default ~/simpl-open-lab-work),
+# not in the repo; see README timing notes.
+ejbca-shim/ejbca-shim
+*.jar
+motoenv/
+keycloak*/
+neo4j-dl/
+run/
+src/
