@@ -126,6 +126,18 @@ The script drives every stage:
 
 In this fork `graphStore.addClaims()` is reachable **only** through `GraphRebuilder` (publish itself writes just to PostgreSQL; graph population is a separate operator/NATS step). Its endpoint ships annotated `@Component` — never registered as an MVC handler — and its worker pool interrupts the n10s import after a 100 ms grace. The patch (against `catalogue-be @ 0e8f7a9`) makes the endpoint a real `@RestController("/graph-rebuild")` and lengthens the grace to 5 s, so a one-shot rebuild reliably populates the graph. Everything else is stock configuration.
 
+### Publishing the *intended* way — via the provider agent
+
+The direct `POST /self-descriptions` above is the catalogue's **internal ingest API**.
+In the real architecture a **provider agent** publishes: `simpl-sd-ui` (creation wizard)
+→ `sd-tooling-be` (enrich → sign via the VC Issuer → publish) → `FederatedCatalogueTier2Client`
+→ **Tier-2 mTLS** through the `tier2-gateway` → `fc-service`. Crucially, "only a provider
+agent can publish" is **not** a role check in the catalogue (it has no Spring Security and
+signature verification is off by default) — it is the **Tier-2 machine-identity perimeter**
+(an ephemeral-proof/mTLS preflight against the IAA). The real publisher `sd-tooling-be`
+**builds + boots here** and drives the publish to exactly `{tier2-gateway}/fc/self-descriptions`.
+Full details, evidence, and the remaining Tier-2 stack: **[catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md)**.
+
 > Note: **publish → search → consume is already demonstrated end-to-end at the Eclipse EDC / Dataspace-Protocol level** (`02-dataspace.sh`: provider publishes an asset+contract-definition, consumer queries the catalog and negotiates, a file is transferred). The Federated Catalogue above is the *richer Gaia-X SD catalog* layered on top.
 
 ## How this differs from the official Simpl-Open deployment
