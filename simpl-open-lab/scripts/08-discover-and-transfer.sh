@@ -120,7 +120,8 @@ PY
 # ── 5. NEGOTIATE + TRANSFER against the DISCOVERED endpoint (EDC layer) ───────────────
 C="http://localhost:$CONSUMER_MGMT/management/v3"
 log "consumer -> discovered endpoint: catalog -> negotiate -> transfer -> verify"
-python3 - "$C" "$ENDPOINT" "$MOTO_PORT" <<'PY'
+# moto venv python (has boto3 for the final verify + urllib for the EDC calls)
+"$LAB_ROOT/motoenv/bin/python" - "$C" "$ENDPOINT" "$MOTO_PORT" <<'PY'
 import sys, json, time, urllib.request
 C, PROTO, MOTO = sys.argv[1], sys.argv[2], sys.argv[3]
 def call(url, body):

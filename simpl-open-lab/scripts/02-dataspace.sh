@@ -63,7 +63,8 @@ curl -s "${H[@]}" -X POST $P/policydefinitions -d '{"@context":'"$V"',"@id":"min
 curl -s "${H[@]}" -X POST $P/contractdefinitions -d '{"@context":'"$V"',"@id":"minio-s3-contract-def","accessPolicyId":"minio-s3-policy","contractPolicyId":"minio-s3-policy","assetsSelector":[]}' >/dev/null
 
 log "2) consumer: catalog -> negotiate -> transfer -> verify"
-python3 - "$C" "$PROTO" "$MOTO_PORT" <<'PY'
+# use the moto venv python (has boto3 + urllib); system python3 may lack boto3
+"$LAB_ROOT/motoenv/bin/python" - "$C" "$PROTO" "$MOTO_PORT" <<'PY'
 import sys,json,time,urllib.request
 C,PROTO,MOTO=sys.argv[1],sys.argv[2],sys.argv[3]
 def call(url,body):
