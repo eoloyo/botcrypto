@@ -70,10 +70,22 @@ log "infra up (Postgres, Redis, CA shim, JWKS, OCSP, quality-scoring)"
 bash "$(dirname "$0")/06-federated-catalogue.sh" >/dev/null 2>&1 || true
 waitup http://localhost:8081/self-descriptions 60 && log "fc-service up on :8081"
 
-# ── 2. apply the gateway trust patch, then build the IAA services ─────────────────────
+# ── 2. apply the local patches, then build the IAA services ───────────────────────────
 GW="$IAA/tier2-gateway"
-git -C "$GW" apply --reverse --check "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch" 2>/dev/null \
-  || git -C "$GW" apply "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch" 2>/dev/null || true
+# apply a repo patch idempotently (skip if already applied)
+applypatch(){ # applypatch <repo-dir> <patch-file>
+  local d="$1" p="$2"
+  [ -f "$p" ] || return 0
+  git -C "$d" apply --reverse --check "$p" 2>/dev/null && return 0   # already applied
+  git -C "$d" apply "$p" 2>/dev/null || git -C "$d" apply --3way "$p" 2>/dev/null || \
+    { log "WARN: could not apply $(basename "$p")"; return 0; }
+  log "applied $(basename "$p")"
+}
+# gateway: trust store (loadTrustedCertificates stub) + /fc route to fc-service
+applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch"
+applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-fc-route.patch"
+# auth-provider: make the startup tier-one key-push non-fatal (so :8104 boots on a fresh agent)
+applypatch "$IAA/authentication_provider" "$REPO_LAB_DIR/iaa/patches/authprovider-startup-keypush-nonfatal.patch"
 mvnb(){ ( cd "$1" && noproxy_env mvn -q -B -ntp -DskipTests -Dspotless.check.skip=true \
   -Dspotless.apply.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true package ); }
 

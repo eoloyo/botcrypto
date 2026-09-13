@@ -1,0 +1,17 @@
+diff --git a/src/main/resources/application-authority.yml b/src/main/resources/application-authority.yml
+index bcec7de..01496f9 100644
+--- a/src/main/resources/application-authority.yml
++++ b/src/main/resources/application-authority.yml
+@@ -26,6 +26,12 @@ spring:
+                 - Path=/authApi/**
+               filters:
+                 - StripPrefix=1
++            - id: fc
++              uri: ${federated-catalogue.url}
++              predicates:
++                - Path=/fc/**
++              filters:
++                - StripPrefix=1
+ routes:
+   logging:
+     business:
