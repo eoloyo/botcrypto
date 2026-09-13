@@ -20,12 +20,26 @@ cd simpl-open-lab/scripts
 - **Prereqs**: Java 21, Maven 3.9+, Go 1.24+, Python 3, and reachable `code.europa.eu`
   (the EU GitLab). It starts its own Postgres (:5433) + Redis; installs nothing global
   except Postgres if missing (run `./01-setup.sh` once first if `initdb` isn't present).
-- **Timing — be realistic**: the **first run takes ≈10–20 min** because it clones ~6
+- **Timing — be realistic**: the **first run takes ≈5–12 min** because it clones ~6
   Simpl repos from EU GitLab and Maven-builds them (+ downloads Neo4j). It is unattended.
-  **Re-runs are fast** (seconds to a couple of minutes): jars, the persisted CA
+  The 5 IAA/publisher services build **in parallel** (3 at a time by default; override
+  with `SIMPL_BUILD_PARALLELISM`), which roughly halves the build phase versus a serial
+  build. **Re-runs are fast** (seconds to a couple of minutes): jars, the persisted CA
   (`/tmp/shim-ca.*`), and `$LAB_ROOT/src` are cached, so it only (re)starts services and
   republishes. A brand-new machine always pays the one-time clone+build — the multi-GB
   Simpl sources/jars are intentionally **not** committed to this repo.
+- **Skip the build entirely (opt-in)**: run the `.github/workflows/build-simpl-jars.yml`
+  workflow (`workflow_dispatch`) once — it builds all 6 jars on GitHub infra and publishes
+  them as a Release. Then point a fresh run at those assets and it downloads instead of
+  building (any download that fails falls back to a local build):
+  ```bash
+  export SIMPL_JARS_RELEASE="https://github.com/<owner>/<repo>/releases/download/<tag>"
+  export SIMPL_JARS_TOKEN="<token with repo scope>"   # only for a private repo
+  ./07-tier2-provider-publish.sh
+  ```
+  This path needs Actions enabled on the repo and is **not verified end-to-end from the
+  sandbox** (Actions can't run there); the local parallel build is the always-available
+  default.
 - Full architecture, the mTLS trust model, and the two required local patches:
   **[catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md)**.
 

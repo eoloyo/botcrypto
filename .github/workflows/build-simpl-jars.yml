@@ -1,0 +1,116 @@
+name: Build Simpl-Open jars
+
+# OPT-IN, USER-RUN. This does on GitHub infra (open internet, no file-size caps, a token
+# in GITHUB_TOKEN) what this sandbox cannot: clone the 6 Simpl-Open services, apply the
+# lab's two local patches, `mvn package` them, and publish the jars as a Release. Then a
+# fresh `scripts/07-tier2-provider-publish.sh` run can skip the ~10-20 min clone+build by
+# downloading those jars instead — set:
+#     export SIMPL_JARS_RELEASE="https://github.com/<owner>/<repo>/releases/download/<tag>"
+#     export SIMPL_JARS_TOKEN="<a token with repo scope>"   # only needed for a private repo
+# NOTE: unverified end-to-end from the sandbox (Actions cannot be run from there). It needs
+# Actions enabled on the repo; the jar asset names match what 07's fetch_jar expects.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish the jars under"
+        required: false
+        default: "simpl-jars-latest"
+      catalogue_ref:
+        description: "catalogue-be git ref (patch was authored against 0e8f7a9)"
+        required: false
+        default: "0e8f7a9"
+
+permissions:
+  contents: write   # required to create the Release and upload assets
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GL: https://code.europa.eu/simpl/simpl-open
+      # Simpl POMs read the version + Maven registry from these CI env vars.
+      PROJECT_RELEASE_VERSION: 1.0.0-local
+      CI_API_V4_URL: https://code.europa.eu/api/v4
+    steps:
+      - name: Checkout botcrypto (for the lab patches)
+        uses: actions/checkout@v4
+        with:
+          path: botcrypto
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Clone the Simpl-Open services
+        run: |
+          set -euxo pipefail
+          declare -A REPOS=(
+            [catalogue-be]="integration/resource-discovery/resource-catalogue/federated-catalogue/catalogue-be"
+            [authentication_provider]="development/iaa/authentication_provider"
+            [identity-provider]="development/iaa/identity-provider"
+            [security-attributes-provider]="development/iaa/security-attributes-provider"
+            [tier2-gateway]="development/iaa/tier2-gateway"
+            [sd-tooling-be]="governance/resource-management/metadata-description/resource-description-tooling/sd-tooling-be"
+          )
+          mkdir -p src
+          for name in "${!REPOS[@]}"; do
+            git clone --depth 50 "$GL/${REPOS[$name]}.git" "src/$name"
+          done
+          # catalogue-be: check out the ref the patch was authored against
+          git -C src/catalogue-be fetch --depth 50 origin "${{ inputs.catalogue_ref }}" || true
+          git -C src/catalogue-be checkout "${{ inputs.catalogue_ref }}" || echo "using default branch for catalogue-be"
+
+      - name: Apply the lab patches
+        run: |
+          set -euxo pipefail
+          P="$GITHUB_WORKSPACE/botcrypto/simpl-open-lab"
+          apply() { # apply <service-dir> <patch>
+            local d="$1" p="$2"
+            git -C "$d" apply --reverse --check "$p" 2>/dev/null && { echo "already applied: $p"; return 0; }
+            git -C "$d" apply --3way "$p" || git -C "$d" apply "$p"
+          }
+          apply src/catalogue-be   "$P/catalogue/patches/catalogue-local.patch"
+          apply src/tier2-gateway  "$P/iaa/patches/tier2-gateway-local-trust.patch"
+
+      - name: Build the jars
+        run: |
+          set -euxo pipefail
+          MVN=(mvn -q -B -ntp -DskipTests -Dspotless.check.skip=true -Dspotless.apply.skip=true \
+               -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true package)
+          for name in catalogue-be authentication_provider identity-provider \
+                      security-attributes-provider tier2-gateway sd-tooling-be; do
+            ( cd "src/$name" && "${MVN[@]}" )
+          done
+
+      - name: Collect jars as <service>.jar
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          for name in catalogue-be authentication_provider identity-provider \
+                      security-attributes-provider tier2-gateway sd-tooling-be; do
+            # pick the Spring Boot (repackaged) jar: exclude original-/sources/javadoc/plain
+            jar=$(find "src/$name/target" -maxdepth 1 -name '*.jar' \
+                    ! -name 'original-*' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*-plain.jar' \
+                    -printf '%s\t%p\n' | sort -rn | head -1 | cut -f2)
+            [ -n "$jar" ] || { echo "no jar for $name" >&2; exit 1; }
+            cp "$jar" "dist/$name.jar"
+          done
+          ls -la dist
+
+      - name: Publish the Release with the jars
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          tag="${{ inputs.tag }}"
+          # (re)create the release, then upload/replace the jar assets
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+                 --title "Simpl-Open prebuilt jars ($tag)" \
+                 --notes "Prebuilt service jars for scripts/07-tier2-provider-publish.sh. Set SIMPL_JARS_RELEASE to this release's download base URL."
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber dist/*.jar

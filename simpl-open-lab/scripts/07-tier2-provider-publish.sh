@@ -9,11 +9,11 @@
 #
 # VERIFIED GREEN. See catalogue/PROVIDER-PUBLICATION.md for the architecture + findings.
 #
-# Prereqs: run 01-setup.sh (clones + builds), 06-federated-catalogue.sh concepts, and
-# have the IAA repos cloned under $LAB_ROOT/src/iaa (authentication_provider,
-# identity-provider, security-attributes-provider, tier2-gateway). This script applies
-# two local patches, brings up the whole mesh, onboards+enrolls the authority and the
-# provider, and publishes.
+# Self-contained: this script clones every repo it needs under $LAB_ROOT/src/<name>,
+# applies the two local patches, builds the jars (bounded-parallel; skips ones already
+# built), brings up the whole mesh, onboards+enrolls the authority and the provider, and
+# publishes. First run clones + builds ~6 services (minutes); re-runs reuse the jars.
+# Optional fast path: set $SIMPL_JARS_RELEASE to download prebuilt jars instead (see §2).
 #
 # Two local patches make the released code work locally (both committed under the repo):
 #   - catalogue/patches/catalogue-local.patch      (fc-service: wire GraphRebuilder, etc.)
@@ -76,9 +76,41 @@ git -C "$GW" apply --reverse --check "$REPO_LAB_DIR/iaa/patches/tier2-gateway-lo
   || git -C "$GW" apply "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch" 2>/dev/null || true
 mvnb(){ ( cd "$1" && noproxy_env mvn -q -B -ntp -DskipTests -Dspotless.check.skip=true \
   -Dspotless.apply.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true package ); }
-for svc in authentication_provider identity-provider security-attributes-provider tier2-gateway sd-tooling-be; do
-  ls "$SRC/$svc"/target/*.jar >/dev/null 2>&1 || { log "building $svc"; mvnb "$SRC/$svc"; }
+
+# Optional fast path (opt-in): if $SIMPL_JARS_RELEASE is set to a base URL that serves the
+# prebuilt service jars as <svc>.jar (e.g. the download URL of a GitHub Release produced by
+# .github/workflows/build-simpl-jars.yml), download them instead of Maven-building. For a
+# private repo, set $SIMPL_JARS_TOKEN to a token with `repo` scope. Any download that fails
+# falls back to a local build, so this is always safe to leave unset (the default: build).
+fetch_jar(){ # fetch_jar <svc> -> populates $SRC/<svc>/target/<svc>.jar
+  local svc="$1" dst="$SRC/$1/target"; mkdir -p "$dst"
+  local hdr=(); [ -n "${SIMPL_JARS_TOKEN:-}" ] && hdr=(-H "Authorization: Bearer $SIMPL_JARS_TOKEN")
+  curl -fsSL "${hdr[@]}" -o "$dst/$svc.jar" "${SIMPL_JARS_RELEASE%/}/$svc.jar"
+}
+build_one(){ # build_one <svc>: idempotent — skip if a jar exists, else download or build
+  local svc="$1"
+  ls "$SRC/$svc"/target/*.jar >/dev/null 2>&1 && return 0
+  if [ -n "${SIMPL_JARS_RELEASE:-}" ]; then
+    log "downloading prebuilt $svc jar"
+    fetch_jar "$svc" && return 0
+    log "download failed for $svc; building locally instead"
+  fi
+  log "building $svc (log: $RUN/build-$svc.log)"; mvnb "$SRC/$svc" >"$RUN/build-$svc.log" 2>&1
+}
+# The 5 IAA/publisher services are independent, so build them with bounded parallelism
+# (default 3 at a time; override with $SIMPL_BUILD_PARALLELISM) to roughly halve the
+# cold-start build phase without OOMing a memory-heavy box. catalogue-be is built by 06.
+SVCS=(authentication_provider identity-provider security-attributes-provider tier2-gateway sd-tooling-be)
+BUILD_PAR="${SIMPL_BUILD_PARALLELISM:-3}"; batch=(); build_fail=0
+run_batch(){ local pids=() svc pid
+  for svc in "${batch[@]}"; do build_one "$svc" & pids+=($!); done
+  for pid in "${pids[@]}"; do wait "$pid" || build_fail=1; done
+  batch=(); }
+for svc in "${SVCS[@]}"; do
+  batch+=("$svc"); [ "${#batch[@]}" -ge "$BUILD_PAR" ] && run_batch
 done
+[ "${#batch[@]}" -gt 0 ] && run_batch
+[ "$build_fail" -eq 0 ] || { log "ERROR: a service build failed — see $RUN/build-*.log"; exit 1; }
 
 jar(){ ls "$1"/target/*.jar | head -1; }
 # ── 3. boot the IAA mesh ──────────────────────────────────────────────────────────────
