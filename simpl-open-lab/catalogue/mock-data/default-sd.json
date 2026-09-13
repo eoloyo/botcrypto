@@ -1,0 +1,116 @@
+{
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "credentialSubject": {
+    "@context": {
+      "gax-validation": "http://w3id.org/gaia-x/validation#",
+      "owl": "http://www.w3.org/2002/07/owl#",
+      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+      "sh": "http://www.w3.org/ns/shacl#",
+      "simpl": "http://w3id.org/gaia-x/simpl#",
+      "skos": "http://www.w3.org/2004/02/skos/core#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#"
+    },
+    "@id": "did:web:registry.gaia-x.eu:DataOffering:fMw2UtNCDW-ydI83YKscqCKa-n75jJ0qY7v0",
+    "rdf:type": {
+      "@id": "simpl:DataOffering"
+    },
+    "dct:conformsTo": {
+      "@id": "https://simpl.example.org/schema/DataSchema",
+      "@type": "dct:Standard",
+      "dct:description": "DataSchema description",
+      "dct:hasVersion": "21",
+      "dct:schemaName": "DataSchema",
+      "dct:title": "DataSchema title"
+    },
+    "simpl:billingSchema": {
+      "rdf:type": {
+        "@id": "simpl:BillingSchema"
+      },
+      "simpl:billingSchemaDocument": "Billing Schema 1",
+      "simpl:billingSchemaHashAlg": "SHA-256",
+      "simpl:billingSchemaHashValue": "7cf87b4138c3d4ca015ba54ccc21c2e879a1eaa60e0979859484550aaa76bded",
+      "simpl:billingSchemaURL": "https://files.dev.simpl-europe.eu/static/pdf/BillingSchema1.pdf"
+    },
+    "simpl:contractTemplate": {
+      "rdf:type": {
+        "@id": "simpl:ContractTemplate"
+      },
+      "simpl:contractTemplateDocument": "Contract Template 1",
+      "simpl:contractTemplateHashAlg": "SHA-256",
+      "simpl:contractTemplateHashValue": "27883d9aec35ab16a3934e6581ed1b7f1b16feb75ead991c07ceff2e4a96fe58",
+      "simpl:contractTemplateURL": "https://files.dev.simpl-europe.eu/static/pdf/ContractTemplate1.pdf"
+    },
+    "simpl:dataProperties": {
+      "rdf:type": {
+        "@id": "simpl:DataProperties"
+      },
+      "simpl:format": "xml"
+    },
+    "simpl:generalServiceProperties": {
+      "rdf:type": {
+        "@id": "simpl:GeneralServiceProperties"
+      },
+      "simpl:description": "afafa",
+      "simpl:inLanguage": "en",
+      "simpl:offeringType": "data",
+      "simpl:name": "aefaf",
+      "simpl:serviceAccessPoint": {
+        "@type": "xsd:anyURI",
+        "@value": "https://creation.com"
+      }
+    },
+    "simpl:offeringPrice": {
+      "rdf:type": {
+        "@id": "simpl:OfferingPrice"
+      },
+      "simpl:currency": "PLN",
+      "simpl:license": {
+        "@type": "xsd:anyURI",
+        "@value": "https://creation.com"
+      },
+      "simpl:price": {
+        "@type": "xsd:decimal",
+        "@value": "47"
+      },
+      "simpl:priceType": "commercial"
+    },
+    "simpl:providerInformation": {
+      "rdf:type": {
+        "@id": "simpl:ProviderInformation"
+      },
+      "simpl:contact": "lala@yahhoo.com",
+      "simpl:providedBy": "https://creation-wizard-frontend.dev.simpl-europe.eu/form",
+      "simpl:signature": "https://creation-wizard-frontend.dev.simpl-europe.eu/form"
+    },
+    "simpl:servicePolicy": {
+      "rdf:type": {
+        "@id": "simpl:ServicePolicy"
+      },
+      "simpl:access-policy": "swvwe",
+      "simpl:usage-policy": "wefwwfe"
+    },
+    "simpl:slaAgreements": {
+      "rdf:type": {
+        "@id": "simpl:SlaAgreements"
+      },
+      "simpl:slaAgreementsDocument": "Sla Agreements 1",
+      "simpl:slaAgreementsHashAlg": "SHA-256",
+      "simpl:slaAgreementsHashValue": "a75b83855522208dfb134f559447c8ca5864c6dc1d705c26f9b735ba175e26fe",
+      "simpl:slaAgreementsURL": "https://files.dev.simpl-europe.eu/static/pdf/SLAAgreement1.pdf"
+    }
+  },
+  "issuanceDate": "2024-08-09T08:45:44.666041778Z",
+  "issuer": "did:jwk:eyJjcnYiOiJFZDI1NTE5Iiwia2lkIjoiZ2FpYS14LWtleTEiLCJrdHkiOiJPS1AiLCJ4IjoiNmNiMXJwb3RkTDNzbk8wbjZ3bXpRWUJXeFhiUVFRTWFlQUFlNHJMMFRGNCJ9",
+  "proof": {
+    "created": "2024-08-09T08:45:44.678451283Z",
+    "jws": "eyJhbGciOiJVbmRlZmluZWQiLCJiNjQiOmZhbHNlLCJjcml0IjpbImI2NCJdfQ..E2vFJbl5i02jm5rRueqnjuD_6GG9cDCo-AF1V2BpgkZUjWxsLah1tK9anPmLKEctmqzWEXx3H5P4OX4r5fIMCw",
+    "proofPurpose": "assertionMethod",
+    "type": "JsonWebSignature2020",
+    "verificationMethod": "did:jwk:eyJjcnYiOiJFZDI1NTE5Iiwia2lkIjoiZ2FpYS14LWtleTEiLCJrdHkiOiJPS1AiLCJ4IjoiNmNiMXJwb3RkTDNzbk8wbjZ3bXpRWUJXeFhiUVFRTWFlQUFlNHJMMFRGNCJ9#0"
+  },
+  "type": "VerifiableCredential"
+}

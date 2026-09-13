@@ -95,23 +95,36 @@ Verified: an authenticated Tier‑1 call to `identity-provider` returns **HTTP 2
 
 **Still to wire for the fully end-to-end official path**: (1) Keycloak realms `authority`/`onboarding` with protocol mappers emitting the claims above + issuer aligned to the gateway `/auth`, so a login *through* the gateway yields an accepted token; (2) **Tier‑2 mTLS** — `tier2-gateway`/`tier2-proxy` enforcing mutual TLS with CA-issued X.509 identities.
 
-## Gaia-X Federated Catalogue (RUNNING — `06-federated-catalogue.sh`)
+## Gaia-X Federated Catalogue — Tier-A SD PUBLISHED FULLY LOCALLY (`06-federated-catalogue.sh`)
 
-The GA-hosted rich catalog (`catalogue-be`, Java pkg `eu.xfsc.fc`, the Gaia-X **XFSC** Federation Catalogue) **boots and runs here**:
+The GA-hosted rich catalog (`catalogue-be`, Java pkg `eu.xfsc.fc`, the Gaia-X **XFSC** Federation Catalogue) now **publishes a Tier-A conformant Self-Description end-to-end, offline, with no external services** — publish → quality-scoring → store → graph → query:
 
-- **Neo4j 5.26 + neosemantics (n10s) + APOC** downloaded, configured, and running (bolt :7687) — the RDF graph store for Self-Descriptions. (61 plugin procedures verified.)
-- **catalogue-be up on :8081** against Neo4j + PostgreSQL (Liquibase-migrated). Verified:
-  - `GET /schemas` → lists loaded ontologies (gaia-x core, trust-framework) + shapes
-  - `POST /schemas` → loads SHACL shapes/ontologies (verified: loaded the Simpl `http://w3id.org/gaia-x/simpl#` ontology + `simpl:DataOffering` shape)
-  - `GET /self-descriptions`, `/selfDescriptions/quickSearch`, `POST /query` → discovery (empty catalog returns `{"totalCount":0}`)
-  - The SHACL **verification pipeline is active** (it validates posted SDs against loaded shapes).
+- **Neo4j 5.26 + neosemantics (n10s) + APOC** (bolt :7687) — the RDF graph store, **auth disabled** for the lab (the autowired Spring driver connects with scheme `none`), n10s graph config initialised.
+- **catalogue-be up on :8081** against Neo4j + PostgreSQL (Liquibase-migrated).
+- **`POST /self-descriptions` → `201`** with `qualityAssessment.overall.classification = "A"`, score `1.0`, `PASSED`. ✓
+- **`GET /self-descriptions` → `totalCount: 1`**, status `active`. ✓
+- **`POST /graph-rebuild` → 10 `Resource` nodes** imported into Neo4j (the DataOffering + its 8 blank-node property groups + the named schema). ✓
+- **`POST /query` (openCypher)** returns the offering `did:web:registry.gaia-x.eu:DataOffering:…` and its properties (`offeringType: "data"`, name, price, etc.). ✓
 
-**Publication — pipeline exercised end-to-end; blocked only by offline document resolution.** `POST /self-descriptions` runs the real chain, and I drove it through each stage:
-1. **Named-schema resolution.** It needs the provider's data schema resolvable via `schemasDao.selectByName(<dct:conformsTo.dct:schemaName>)` = `"DataSchema"`, from the `schemas` table (a **schema-manager** artifact). I registered it directly (what schema-manager writes): `INSERT INTO schemas(id=gen_random_uuid(), name='DataSchema', version='1', resource_type='data', status='PUBLISHED', schema_body=<SHACL shape>)`. After that the "no schema found" error was gone. ✓
-2. **SHACL validation runs for real.** With the schema-manager `data-offeringShape.ttl` as the body, the catalogue returned a genuine SHACL **validation report** (e.g. `dcterms:title` / `simpl:billingModelDetails` "Property needs to have at least 1 value") — i.e. the mock `default-sd.json` doesn't fully conform to that strict shape. Its matching shape is the catalogue's own `mock-data/test-schema.ttl` (per `SelfDescriptionControllerTest`, which pairs `default-sd.json` + `simpl-ontology.ttl` + `test-schema.ttl` and mocks the store). ✓ (validation engine works)
-3. **Final blocker = external document/DNS resolution.** A clean publish then dereferences the SD's JSON-LD `@context` / `dct:conformsTo` `@id` and the Gaia‑X trust registry over the network; the test SD uses the non-existent domain `simpl.example.org`, so verification hits `NXDOMAIN` (`org.apache.jena.riot: Content is not allowed in prolog` → 500). The catalogue's unit tests mock these fetches. This is an **offline-sandbox limitation**, not a catalogue defect.
+### The real blocker was a hard-coded link (not JSON-LD/DNS)
 
-So the full catalogue **publication pipeline is exercised and working** — RDF store, schema loading, named-schema resolution, and live SHACL validation all run — and a *clean* publish needs (a) an SD that conforms to the exact loaded shape and (b) its JSON-LD contexts + trust-registry resolvable (network, or a local document loader). Search/discovery endpoints are live throughout.
+The publish path makes a **mandatory synchronous** call to the quality-scoring service at a **hard-coded Kubernetes hostname**:
+
+```
+QUALITY_SCORING_URL default = https://quality-scoring-service.authority01.svc.cluster.local:8080
+```
+
+Off-cluster that is `NXDOMAIN` → HTTP 500, and the SD is aborted **before** it is stored. The fix is a tiny local stub (`catalogue/qs-stub.py`) returning a valid **MQR** quality report (`sh:ValidationReport` → `mqr:hasProfileScore` with `weightedScore ≥ thresholdValue`, `classificationLabel "A"`, statuses `PASSED`), pointed at via `--quality-scoring.url=http://localhost:8085`. (JSON-LD `@context` / trust-registry dereferencing is handled separately by booting with `--…doc-loader.enable-http=false --…enable-local-cache=true`.)
+
+The script drives every stage:
+1. **Named-schema resolution.** The SD's `credentialSubject.dct:conformsTo → dct:schemaName "DataSchema"` must resolve via `schemasDao.selectByName(...)` from the `schemas` table (normally a **schema-manager** artifact). Registered directly: `INSERT INTO schemas(name='DataSchema', resource_type='data', status='PUBLISHED', schema_body=<test-schema.ttl>, …)`. ✓
+2. **SHACL validation** runs for real against the loaded `simpl#` ontology + `test-schema.ttl` shape (the pairing the catalogue's own `SelfDescriptionControllerTest` uses). ✓
+3. **Quality scoring** → local stub → Tier **A**. ✓
+4. **Store** (PostgreSQL) + **graph import** (Neo4j via n10s). ✓
+
+### Two source tweaks captured in `catalogue/patches/catalogue-local.patch`
+
+In this fork `graphStore.addClaims()` is reachable **only** through `GraphRebuilder` (publish itself writes just to PostgreSQL; graph population is a separate operator/NATS step). Its endpoint ships annotated `@Component` — never registered as an MVC handler — and its worker pool interrupts the n10s import after a 100 ms grace. The patch (against `catalogue-be @ 0e8f7a9`) makes the endpoint a real `@RestController("/graph-rebuild")` and lengthens the grace to 5 s, so a one-shot rebuild reliably populates the graph. Everything else is stock configuration.
 
 > Note: **publish → search → consume is already demonstrated end-to-end at the Eclipse EDC / Dataspace-Protocol level** (`02-dataspace.sh`: provider publishes an asset+contract-definition, consumer queries the catalog and negotiates, a file is transferred). The Federated Catalogue above is the *richer Gaia-X SD catalog* layered on top.
 
@@ -133,7 +146,7 @@ Official Simpl-Open runs on **Kubernetes via Helm/ArgoCD**, one agent per namesp
 | Inter-agent trust | Tier-2 mTLS with CA-issued certs | connectors use Simpl's **built-in dev identity mock** |
 | Async messaging | Kafka | not run (adapter boots without it) |
 | Secrets | HashiCorp Vault | not used (dev config) |
-| Federated Catalogue (Gaia-X XFSC) | deployed | code present/built; not run in the transfer path |
+| Federated Catalogue (Gaia-X XFSC) | deployed, quality-scoring + schema-manager as services | **runs; publishes a Tier-A SD end-to-end** with a local quality-scoring stub + directly-registered named schema |
 
 **Bottom line:** the *application and data-space layers are the real thing* (real jars, real EDC/DSP, real Postgres, real transfer, real X.509 issuance). The *platform/trust hardening* — EJBCA PKI, full mTLS between agents, Vault, Kafka, and the Helm-orchestrated multi-namespace topology — is substituted or simplified. Functionally equivalent for exercising and debugging the code; not a production-grade secure deployment.
 

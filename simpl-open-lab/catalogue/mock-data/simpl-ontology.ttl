@@ -1,0 +1,810 @@
+@prefix simpl: <http://w3id.org/gaia-x/simpl#> .
+@prefix gax-core: <https://w3id.org/gaia-x/core#> .
+@prefix vcard: <https://www.w3.org/2006/vcard/ns#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix vcard: <http://www.w3.org/2006/vcard/ns#> .
+@prefix did: <https://www.w3.org/TR/did-core/#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix dcat: <http://www.w3.org/ns/dcat#> .
+@prefix cc: <http://creativecommons.org/ns#> .
+@prefix ids: <https://w3id.org/idsa/core/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix vann: <http://purl.org/vocab/vann/> .
+@prefix voaf: <http://purl.org/vocommons/voaf#> .
+@prefix void: <http://rdfs.org/ns/void#> .
+@prefix schema: <http://schema.org/> .
+
+
+simpl:
+a		voaf:Vocabulary, owl:Ontology ;
+rdfs:label		"Gaia-X trusted-cloud Ontology"@en ;
+dct:title		"Gaia-X trusted-cloud Ontology"@en ;
+dct:abstract		"todo" ;
+cc:license		<http://www.apache.org/licenses/LICENSE-2.0> ;
+dct:creator		"Working Group Service Characteristics" ;
+dct:contributor		"Akyürek, Haydar", "Bader, Sebastian", "Baum, Hannes", "Blanch, Josep", "Frömberg, Jan", "Gronlier, Pierre", "Hermsen, Felix", "Lange, Christoph", "Langkau, Jörg", "Leberecht, Markus", "Meinke, Kai", "Moosmann, Paul", "Niessen, Thomas", "Ogel, Frederic", "Ottradovetz, Klaus", "Qin, Chang", "Rubina, Alina", "Staginus, Judith", "Strunk, Anja", "Theissen-Lipp, Johannes" ;
+dct:created		"2021-10-18T12:00:00+01:00"^^xsd:dateTimeStamp ;
+owl:versionInfo		"22.04" ;
+vann:preferredNamespaceUri		"https://simpl#" ;
+vann:preferredNamespacePrefix		"simpl" ;
+void:vocabulary 		vann:, void:, voaf:, dct: ;
+dct:modified		"2026-02-13T10:52:14+01:00"^^xsd:dateTimeStamp ;
+.
+
+##################
+##ApplicationProperties
+##################
+
+simpl:ApplicationProperties
+	a		 owl:Class;
+	rdfs:label		 "Application Properties"@en ;
+.
+
+simpl:package
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "package"@en ;
+	rdfs:domain		 simpl:ApplicationProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Application package" ;
+.
+
+simpl:link
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "link"@en ;
+	rdfs:domain		 simpl:ApplicationProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "Application link" ;
+.
+
+simpl:openApi
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "open api"@en ;
+	rdfs:domain		 simpl:ApplicationProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "Format under which the application is distributed (e.g. docker image, executable package, ...). Might be more than one format available for the same application." ;
+.
+
+simpl:targetUsers
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "target users"@en ;
+	rdfs:domain		 simpl:ApplicationProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Target users" ;
+.
+
+simpl:requirements
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "requirements"@en ;
+	rdfs:domain		 simpl:ApplicationProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Requirements on the runtime environment (useful for the deployment in the infrastructure provider)" ;
+.
+
+simpl:url
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "url"@en ;
+	rdfs:domain		 simpl:ApplicationProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "URL of the documentation on how to use the application" ;
+.
+
+##################
+##AssetProperties
+##################
+
+simpl:AssetProperties
+	a		 owl:Class;
+	rdfs:label		 "Asset Properties"@en ;
+.
+
+simpl:providerDataAddress
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "provider data address"@en ;
+	rdfs:domain		 simpl:AssetProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Provider Data address" ;
+.
+
+##################
+##BillingSchema
+##################
+
+simpl:BillingSchema
+	a		 owl:Class;
+	rdfs:label		 "Billing Schema"@en ;
+.
+
+simpl:billingSchemaDocument
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "billing schema document"@en ;
+	rdfs:domain		 simpl:BillingSchema ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates Billing Schema Document" ;
+.
+
+simpl:billingSchemaHashValue
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "billing schema hash value"@en ;
+	rdfs:domain		 simpl:BillingSchema ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates HASH VALUE" ;
+.
+
+simpl:billingSchemaHashAlg
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "billing schema hash alg"@en ;
+	rdfs:domain		 simpl:BillingSchema ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates HASH ALGORITHM" ;
+.
+
+simpl:billingSchemaURL
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "billing schema url"@en ;
+	rdfs:domain		 simpl:BillingSchema ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "URL" ;
+.
+
+##################
+##ContractTemplate
+##################
+
+simpl:ContractTemplate
+	a		 owl:Class;
+	rdfs:label		 "Contract Template"@en ;
+.
+
+simpl:contractTemplateDocument
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "contract template document"@en ;
+	rdfs:domain		 simpl:ContractTemplate ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates Contract Template Document" ;
+.
+
+simpl:contractTemplateHashValue
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "contract template hash value"@en ;
+	rdfs:domain		 simpl:ContractTemplate ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates HASH VALUE" ;
+.
+
+simpl:contractTemplateHashAlg
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "contract template hash alg"@en ;
+	rdfs:domain		 simpl:ContractTemplate ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates HASH ALGORITHM" ;
+.
+
+simpl:contractTemplateURL
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "contract template url"@en ;
+	rdfs:domain		 simpl:ContractTemplate ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "URL" ;
+.
+
+##################
+##DataProperties
+##################
+
+simpl:DataProperties
+	a		 owl:Class;
+	rdfs:label		 "Data Properties"@en ;
+.
+
+simpl:producedBy
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "produced by"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "Provenance" ;
+.
+
+simpl:format
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "format"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Format under which the data is distributed (e.g. csv, xml, …)." ;
+.
+
+simpl:openApi
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "open api"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "Schema of the dataset, depends on the type of data for JSON it would be JSON Schema Description that states what fields the data has and the types." ;
+.
+
+simpl:additionalInfo
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "additional info"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "Additional Information about the dataset" ;
+.
+
+simpl:relatedDatasets
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "related datasets"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Related datasets" ;
+.
+
+simpl:targetUsers
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "target users"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Target users" ;
+.
+
+simpl:dataQuality
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "data quality"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Data Quality (to include metrics such as completeness, accuracy, timeliness and other)" ;
+.
+
+simpl:encryption
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "encryption"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Encryption: Describes the encryption algorithms and keys used to secure the data" ;
+.
+
+simpl:anonymization
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "anonymization"@en ;
+	rdfs:domain		 simpl:DataProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Anonymization/pseudonymization: Indicates whether sensitive information has been anonymized or pseudonymized to protect privacy" ;
+.
+
+##################
+##EdcConnector
+##################
+
+simpl:EdcConnector
+	a		 owl:Class;
+	rdfs:label		 "Edc Connector"@en ;
+.
+
+simpl:providerEndpointURL
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "provider endpoint url"@en ;
+	rdfs:domain		 simpl:EdcConnector ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Provider endpoint url" ;
+.
+
+##################
+##EdcRegistration
+##################
+
+simpl:EdcRegistration
+	a		 owl:Class;
+	rdfs:label		 "Edc Registration"@en ;
+.
+
+simpl:contractDefinitionId
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "contract definition id"@en ;
+	rdfs:domain		 simpl:EdcRegistration ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Unique identifier of contract definition" ;
+.
+
+simpl:servicePolicyId
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "service policy id"@en ;
+	rdfs:domain		 simpl:EdcRegistration ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Unique identifier of service policy" ;
+.
+
+simpl:accessPolicyId
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "access policy id"@en ;
+	rdfs:domain		 simpl:EdcRegistration ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Unique identifier of access policy" ;
+.
+
+simpl:assetId
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "asset id"@en ;
+	rdfs:domain		 simpl:EdcRegistration ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Unique identifier of asset" ;
+.
+
+##################
+##GeneralServiceProperties
+##################
+
+simpl:GeneralServiceProperties
+	a		 owl:Class;
+	rdfs:label		 "General Service Properties"@en ;
+.
+
+simpl:name
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "name"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "A short text title for the dataset/application/infrastructure" ;
+.
+
+simpl:description
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "description"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "A description for the dataset/application/infrastructure" ;
+.
+
+simpl:serviceAccessPoint
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "service access point"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "The location where the dataset/application/infrastructure can be found (likely an endpoint URL)" ;
+.
+
+simpl:keywords
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "keywords"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Keywords" ;
+.
+
+simpl:inLanguage
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "in language"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Language (of the metadata, like the title, description)" ;
+.
+
+simpl:offeringType
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "offering type"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Offering type using for search" ;
+.
+
+simpl:sharingMethodId
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "sharing method id"@en ;
+	rdfs:domain		 simpl:GeneralServiceProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Sharing Method Id type using for Resource Address Template" ;
+.
+
+##################
+##InfrastructureProperties
+##################
+
+simpl:InfrastructureProperties
+	a		 owl:Class;
+	rdfs:label		 "Infrastructure Properties"@en ;
+.
+
+simpl:targetUsers
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "target users"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Target users" ;
+.
+
+simpl:requirements
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "requirements"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Requirements on the runtime environment (useful for the deployment in the infrastructure provider)" ;
+.
+
+simpl:url
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "url"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "URL of the documentation on how to use the application" ;
+.
+
+simpl:resourceType
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "resource type"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Resource Type" ;
+.
+
+simpl:regionAndAz
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "region and az"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Region And Availability" ;
+.
+
+simpl:sizeAndCap
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "size and cap"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Size and Capacity" ;
+.
+
+simpl:osAndImage
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "os and image"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Operating System and Image" ;
+.
+
+simpl:networkConfiguration
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "network configuration"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Network Configuration" ;
+.
+
+simpl:securitySettings
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "security settings"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Security Settings" ;
+.
+
+simpl:instanceType
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "instance type"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Instance Type" ;
+.
+
+simpl:storageType
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "storage type"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Storage Type" ;
+.
+
+simpl:backup
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "backup"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Backup And Redundancy" ;
+.
+
+simpl:scalability
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "scalability"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Scalability Options" ;
+.
+
+simpl:monitoring
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "monitoring"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Monitoring and Logging" ;
+.
+
+simpl:tags
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "tags"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Tags and Metadata" ;
+.
+
+simpl:externalUrl
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "external url"@en ;
+	rdfs:domain		 simpl:InfrastructureProperties ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "External Url" ;
+.
+
+##################
+##OfferingPrice
+##################
+
+simpl:OfferingPrice
+	a		 owl:Class;
+	rdfs:label		 "Offering Price"@en ;
+.
+
+simpl:license
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "license"@en ;
+	rdfs:domain		 simpl:OfferingPrice ;
+	rdfs:range		 xsd:anyURI ;
+	rdfs:comment		 "URL to the used license" ;
+.
+
+simpl:currency
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "currency"@en ;
+	rdfs:domain		 simpl:OfferingPrice ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Price and conditions" ;
+.
+
+simpl:price
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "price"@en ;
+	rdfs:domain		 simpl:OfferingPrice ;
+	rdfs:range		 xsd:decimal ;
+	rdfs:comment		 "Price and conditions" ;
+.
+
+simpl:priceType
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "price type"@en ;
+	rdfs:domain		 simpl:OfferingPrice ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Price Type" ;
+.
+
+##################
+##ProviderInformation
+##################
+
+simpl:ProviderInformation
+	a		 owl:Class;
+	rdfs:label		 "Provider Information"@en ;
+.
+
+simpl:providedBy
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "provided by"@en ;
+	rdfs:domain		 simpl:ProviderInformation ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "A reference to ID of the dataset/application/infrastructure provider" ;
+.
+
+simpl:contact
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "contact"@en ;
+	rdfs:domain		 simpl:ProviderInformation ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Who to contact in case of questions/issues" ;
+.
+
+simpl:signature
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "signature"@en ;
+	rdfs:domain		 simpl:ProviderInformation ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "A digital signature that ensures that the provider is the one that uploaded the Self-description" ;
+.
+
+##################
+##ServicePolicy
+##################
+
+simpl:ServicePolicy
+	a		 owl:Class;
+	rdfs:label		 "Service Policy"@en ;
+.
+
+simpl:access-policy
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "access policy"@en ;
+	rdfs:domain		 simpl:ServicePolicy ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Access policy to define who can access the dataset" ;
+.
+
+simpl:usage-policy
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "usage policy"@en ;
+	rdfs:domain		 simpl:ServicePolicy ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Usage policy to define how a dataset can be used" ;
+.
+
+simpl:dataProtectionRegime
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "data protection regime"@en ;
+	rdfs:domain		 simpl:ServicePolicy ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates compliance with relevant data protection regulations and standards" ;
+.
+
+##################
+##SlaAgreements
+##################
+
+simpl:SlaAgreements
+	a		 owl:Class;
+	rdfs:label		 "Sla Agreements"@en ;
+.
+
+simpl:slaAgreementsDocument
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "sla agreements document"@en ;
+	rdfs:domain		 simpl:SlaAgreements ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates Sla Agreements Document" ;
+.
+
+simpl:slaAgreementsHashValue
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "sla agreements hash value"@en ;
+	rdfs:domain		 simpl:SlaAgreements ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates HASH VALUE" ;
+.
+
+simpl:slaAgreementsHashAlg
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "sla agreements hash alg"@en ;
+	rdfs:domain		 simpl:SlaAgreements ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "Indicates HASH ALGORITHM" ;
+.
+
+simpl:slaAgreementsURL
+	a		 owl:DatatypeProperty ;
+	rdfs:label		 "sla agreements url"@en ;
+	rdfs:domain		 simpl:SlaAgreements ;
+	rdfs:range		 xsd:string ;
+	rdfs:comment		 "SLA Agreements URL" ;
+.
+
+##################
+##ApplicationOffering
+##################
+
+simpl:ApplicationOffering
+	a		 owl:Class;
+	rdfs:label		 "Application Offering"@en ;
+	rdfs:subClassOf		simpl:ServiceOffering ;
+.
+
+simpl:applicationProperties
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "application properties"@en ;
+	rdfs:domain		 simpl:ApplicationOffering ;
+	rdfs:range		 simpl:ApplicationProperties ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+##################
+##DataOffering
+##################
+
+simpl:DataOffering
+	a		 owl:Class;
+	rdfs:label		 "Data Offering"@en ;
+	rdfs:subClassOf		simpl:ServiceOffering ;
+.
+
+simpl:dataProperties
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "data properties"@en ;
+	rdfs:domain		 simpl:DataOffering ;
+	rdfs:range		 simpl:DataProperties ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+##################
+##InfrastructureOffering
+##################
+
+simpl:InfrastructureOffering
+	a		 owl:Class;
+	rdfs:label		 "Infrastructure Offering"@en ;
+	rdfs:subClassOf		simpl:ServiceOffering ;
+.
+
+simpl:infrastructureProperties
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "infrastructure properties"@en ;
+	rdfs:domain		 simpl:InfrastructureOffering ;
+	rdfs:range		 simpl:InfrastructureProperties ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+##################
+##ServiceOffering
+##################
+
+simpl:ServiceOffering
+	a		 owl:Class;
+	rdfs:label		 "Service Offering"@en ;
+	rdfs:subClassOf		gax-core:ServiceOffering ;
+.
+
+simpl:generalServiceProperties
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "general service properties"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:GeneralServiceProperties ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:assetProperties
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "asset properties"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:AssetProperties ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:providerInformation
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "provider information"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:ProviderInformation ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:offeringPrice
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "offering price"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:OfferingPrice ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:servicePolicy
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "service policy"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:ServicePolicy ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:contractTemplate
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "contract template"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:ContractTemplate ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:edcRegistration
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "edc registration"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:EdcRegistration ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
+simpl:edcConnector
+	a		 owl:ObjectProperty ;
+	rdfs:label		 "edc connector"@en ;
+	rdfs:domain		 simpl:ServiceOffering ;
+	rdfs:range		 simpl:EdcConnector ;
+	rdfs:comment		 "Basic classification of the service as per provision type and service model." ;
+.
+
