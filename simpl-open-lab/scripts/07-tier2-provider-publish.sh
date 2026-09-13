@@ -131,7 +131,10 @@ apboot(){ bg env JAVA_HOME=$JH java -jar "$(jar "$IAA/authentication_provider")"
   --microservice.identity-provider.url=http://localhost:8103 --microservice.security-attributes-provider.url=http://localhost:8102 \
   --simpl.gateway.tier-one-url=http://localhost:8101 --simpl.gateway.tier-two-url=https://localhost:8443; }
 up http://localhost:8105/actuator/health || apboot 8105 local-authority authority_authprovider https://localhost:$SHIM_HTTPS
-up http://localhost:8104/actuator/health || apboot 8104 local-consumer  authprovider           https://localhost:8443
+# NOTE: the participant auth_provider (:8104) points client.authority.url at the gateway
+# (:8443) and calls it at startup — a hard dependency. The gateway isn't up until step 4
+# (it needs the GA credentialed first), so :8104 is booted THERE, after the gateway, to
+# avoid a fatal "Connection refused localhost:8443 / Application run failed" at boot.
 # SAP (:8102, GA ephemeral-proof needs it)
 up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH java -jar "$(jar "$IAA/security-attributes-provider")" \
   --spring.profiles.active=local --server.port=8102 \
@@ -140,8 +143,8 @@ up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH java -jar "$(ja
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --microservice.identity-provider.url=http://localhost:8103 --microservice.authentication-provider.url=http://localhost:8105 \
   --simpl.ephemeral-proof.issuer-url=https://localhost:8443 --open-id-connect.certs-endpoint=http://localhost:9099/certs
-for p in 8103 8104 8105 8102; do waitup http://localhost:$p/actuator/health 60 >/dev/null || log "WARN: :$p not healthy"; done
-log "IAA mesh up (identity-provider, GA+provider auth_provider, SAP)"
+for p in 8103 8105 8102; do waitup http://localhost:$p/actuator/health 60 >/dev/null || log "WARN: :$p not healthy"; done
+log "IAA authority side up (identity-provider, GA auth_provider, SAP)"
 
 # ── 4. enroll the AUTHORITY (root of trust) then boot the gateway with its identity ───
 bash "$REPO_LAB_DIR/iaa/enroll.sh" 8105 "Local Authority" true  | tail -1
@@ -154,6 +157,11 @@ gwboot(){ bg env JAVA_HOME=$JH java -jar "$GWJAR" --spring.profiles.active=local
 # (re)start the gateway so it fetches its server identity from the now-credentialed GA
 ps -eo pid,args | grep 'tier2-gateway-local.jar' | grep -v grep | awk '{print $1}' | xargs -r kill 2>/dev/null || true
 sleep 2; gwboot; waitup https://localhost:8443/actuator/health 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
+
+# now the gateway is up, boot the PARTICIPANT auth_provider (:8104) — it hard-depends on
+# the gateway at startup (client.authority.url=https://localhost:8443).
+up http://localhost:8104/actuator/health || apboot 8104 local-consumer authprovider https://localhost:8443
+waitup http://localhost:8104/actuator/health 90 >/dev/null && log "participant auth_provider up on :8104" || log "WARN: :8104 not healthy"
 
 # ── 5. enroll the PROVIDER (registers with the GA through the gateway mTLS) ────────────
 bash "$REPO_LAB_DIR/iaa/enroll.sh" 8104 "ACME Provider" false | tail -1
