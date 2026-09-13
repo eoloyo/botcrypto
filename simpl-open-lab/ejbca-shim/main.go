@@ -279,19 +279,30 @@ func router(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	initCA()
-	// generate a self-signed server cert for HTTPS on :30443 (what identity-provider expects)
+	// HTTPS server cert for :30443, issued BY THE CA (like a real EJBCA-issued TLS cert)
+	// with AIA + OCSP so the Simpl IAA HTTP client (eu.europa.ec.simpl.client.util), which
+	// requires "Authority information access" on every peer cert and does OCSP revocation
+	// checking, accepts the handshake. A self-signed server cert (no AIA) is rejected with
+	// "Authority information access is not present". Written to /tmp/shim-server-leaf.pem so
+	// the OCSP responder (globs *-leaf.pem) knows its serial and returns GOOD.
 	srvKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	srvSerial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	srvTmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "localhost"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().AddDate(1, 0, 0),
-		DNSNames:     []string{"localhost"},
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		SerialNumber:          srvSerial,
+		Subject:               pkix.Name{CommonName: "localhost"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().AddDate(1, 0, 0),
+		DNSNames:              []string{"localhost"},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		OCSPServer:            []string{"http://localhost:30081/ocsp"},
+		IssuingCertificateURL: []string{"http://localhost:30080/ejbca/publicweb/webdist/certdist?cmd=iep&issuer=OnBoardingCA"},
 	}
-	srvDER, _ := x509.CreateCertificate(rand.Reader, srvTmpl, srvTmpl, &srvKey.PublicKey, srvKey)
-	tlsCert := tls.Certificate{Certificate: [][]byte{srvDER}, PrivateKey: srvKey}
+	srvDER, _ := x509.CreateCertificate(rand.Reader, srvTmpl, caCert, &srvKey.PublicKey, caKey)
+	_ = writePEM("/tmp/shim-server-leaf.pem", "CERTIFICATE", srvDER)
+	// present the full chain [server, CA] so clients can build the path to the trusted CA
+	tlsCert := tls.Certificate{Certificate: [][]byte{srvDER, caDER}, PrivateKey: srvKey}
 
 	mux := http.HandlerFunc(router)
 	// HTTP on 30080 (easy direct testing) + HTTPS on 30443 (identity-provider default)
