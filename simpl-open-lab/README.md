@@ -43,6 +43,36 @@ cd simpl-open-lab/scripts
 - Full architecture, the mTLS trust model, and the two required local patches:
   **[catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md)**.
 
+## End-to-end: discover in the catalogue → transfer from the provider
+
+```bash
+cd simpl-open-lab/scripts
+./08-discover-and-transfer.sh      # → ends with DISCOVERY→TRANSFER VERIFIED
+```
+
+This is the whole point of a dataspace, exercised in one run: a **consumer discovers a
+provider's offering in the Federated Catalogue and then pulls the actual data from the
+provider** — joining the two discovery layers the other scripts run separately.
+
+1. **Semantic discovery (Gaia-X catalogue):** the consumer does `GET :8081/self-descriptions`,
+   finds the `DataOffering` SD, and reads the provider connector's DSP endpoint out of the
+   SD's `simpl:serviceAccessPoint` (`http://localhost:19194/protocol`). It never hardcodes
+   that endpoint — it comes from the catalogue. (The bridge is one field in
+   `catalogue/mock-data/default-sd.json`.)
+2. **Technical negotiation (EDC):** the consumer runs `catalog/request` against the
+   *discovered* endpoint → concrete offer + `asset: example-s3-asset` → contract negotiation
+   → `transferprocesses` (`MinioS3-PUSH`).
+3. **Verified:** `example-s3.txt` lands in `consumer-bucket` (the consumer-bucket is cleared
+   first, so the result is attributable to this catalogue-driven transfer).
+
+`08` is idempotent and brings up its own prerequisites: if the catalogue is empty it runs
+`07` (or you can seed it faster with `06`), and it builds `connector-be` + runs `02` for the
+EDC dataspace. Prereqs beyond those: the moto venv from `01-setup.sh` (S3 mock).
+
+> **Verified run (this session):** discovered SD
+> `did:web:…:DataOffering:fMw2UtNCDW-…` → endpoint `http://localhost:19194/protocol`
+> → agreement issued → `transfer: COMPLETED` → `consumer-bucket: ['example-s3.txt']`.
+
 ## TL;DR — the layers, step by step
 
 ```bash
@@ -52,6 +82,7 @@ cd simpl-open-lab/scripts
 ./03-ga-iaa.sh      # Keycloak + CA shim + identity-provider -> issue a verified participant X.509 identity
 ./06-federated-catalogue.sh   # Gaia-X catalogue: publish a Tier-A SD locally (direct ingest)
 ./07-tier2-provider-publish.sh # the full provider-agent Tier-2 mTLS publish (above)
+./08-discover-and-transfer.sh  # consumer discovers the SD in the catalogue -> transfers from the provider
 ```
 
 Outcomes proven on a stock Linux box (Java 21, Maven 3.9, Go 1.24):

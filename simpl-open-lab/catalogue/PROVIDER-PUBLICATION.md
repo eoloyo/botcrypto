@@ -60,6 +60,23 @@ equivalent to a call that is **already inside** that perimeter — the same byte
 `fc-service` receives once the Tier-2 client is past the gateway — but it skips the
 wizard, the signer, and the mTLS gate that make it a *provider-agent* action.
 
+## From discovery to a data transfer (the point of publishing)
+
+Publishing an SD is only half the dataspace story — the other half is a **consumer
+discovering it and pulling the data**. A dataspace has two discovery layers, and the SD is
+what joins them:
+
+- **Gaia-X Federated Catalogue** (`fc-service`) = *semantic* discovery: who offers what, and
+  **where is their connector**. The connector address is the SD's
+  `credentialSubject.simpl:generalServiceProperties.simpl:serviceAccessPoint` — in this lab
+  it names the provider EDC connector's DSP endpoint (`http://localhost:19194/protocol`).
+- **EDC DSP catalog** (the connector at that endpoint) = *technical* negotiation: the offer,
+  the concrete `asset`, the policy, the contract, the transfer.
+
+`scripts/08-discover-and-transfer.sh` runs the full path: the consumer reads the endpoint out
+of the catalogue SD (never hardcoded), then negotiates + transfers against it, ending with the
+file in `consumer-bucket`. So `serviceAccessPoint` is the **discovery→transfer bridge**.
+
 ## Status in this lab
 
 > **ACHIEVED — a provider agent published a Self-Description through the full Tier-2
