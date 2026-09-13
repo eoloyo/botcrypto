@@ -27,7 +27,8 @@
 #          mTLS to register the credential (503, tx rolls back). Needs the
 #          authority-side IAA + tier2-gateway mTLS + SAP — the two-sided trust
 #          fabric. See catalogue/PROVIDER-PUBLICATION.md for the full analysis.
-#   [TODO] authority-side authentication_provider (authority profile) as the GA
+#   [OK]   authority-side authentication_provider (authority profile) as the GA:
+#          boots on :8105, own DB (authority_authprovider), profile local-authority
 #   [TODO] security-attributes-provider (SAP) for /sapApi/tier2/v2/token
 #   [TODO] tier2-gateway: mTLS termination + route /fc,/authApi,/sapApi,/identityApi
 #   [TODO] point sd-tooling-be at the gateway and publish through the full path
