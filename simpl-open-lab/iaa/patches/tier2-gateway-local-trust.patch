@@ -1,0 +1,32 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/gateway/tier2/clients/impl/AuthenticationProviderClientImpl.java b/src/main/java/eu/europa/ec/simpl/gateway/tier2/clients/impl/AuthenticationProviderClientImpl.java
+index a32f6bb..b9562bd 100644
+--- a/src/main/java/eu/europa/ec/simpl/gateway/tier2/clients/impl/AuthenticationProviderClientImpl.java
++++ b/src/main/java/eu/europa/ec/simpl/gateway/tier2/clients/impl/AuthenticationProviderClientImpl.java
+@@ -99,9 +99,25 @@ public class AuthenticationProviderClientImpl implements AuthenticationProviderC
+         }
+     }
+ 
+-    // TODO implement fetching trusted identities from authentication provider when the API is available
++    // Upstream this is a TODO stub returning List.of() ("implement fetching trusted
++    // identities from authentication provider when the API is available"), which makes
++    // the gateway's client-cert trust store permanently empty so mTLS (ClientAuth.REQUIRE)
++    // rejects every client. LOCAL LAB PATCH: load trusted CA cert(s) from a PEM file
++    // (simpl.local.trusted-ca-file, default /tmp/shim-ca.pem) so the federation trust
++    // is the local authority CA.
+     @Override
+     public LoadTrustedIdentitiesOutcome loadTrustedCertificates() {
+-        return new LoadTrustedIdentitiesOutcome.Success(List.of(), trustedAuthoritiesProperties.retentionTime());
++        var path = System.getProperty("simpl.local.trusted-ca-file", "/tmp/shim-ca.pem");
++        try (var in = new java.io.FileInputStream(path)) {
++            var cf = java.security.cert.CertificateFactory.getInstance("X.509");
++            var certs = cf.generateCertificates(in).stream()
++                    .map(c -> (java.security.cert.X509Certificate) c)
++                    .toList();
++            log.info("LOCAL PATCH: loaded {} trusted CA certificate(s) from {}", certs.size(), path);
++            return new LoadTrustedIdentitiesOutcome.Success(certs, trustedAuthoritiesProperties.retentionTime());
++        } catch (Exception e) {
++            log.warn("LOCAL PATCH: could not load trusted CA from {}: {}", path, e.getMessage());
++            return new LoadTrustedIdentitiesOutcome.Success(List.of(), trustedAuthoritiesProperties.retentionTime());
++        }
+     }
+ }
