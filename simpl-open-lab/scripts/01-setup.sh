@@ -41,6 +41,11 @@ declare -A REPOS=(
   [integration/resource-sharing/resource-sharing-runtime/resource-consumption/contract-consumption-adapter-be]=contract-consumption
   [governance/resource-management/metadata-description/validation/validation-be]=validation-be
   [development/iaa/identity-provider]=identity-provider
+  # IAA Tier-2 mesh (used by 07-tier2-provider-publish.sh)
+  [development/iaa/authentication_provider]=authentication_provider
+  [development/iaa/security-attributes-provider]=security-attributes-provider
+  [development/iaa/tier2-gateway]=tier2-gateway
+  [governance/resource-management/metadata-description/resource-description-tooling/sd-tooling-be]=sd-tooling-be
 )
 mkdir -p "$LAB_ROOT/src"
 for path in "${!REPOS[@]}"; do

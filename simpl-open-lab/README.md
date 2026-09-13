@@ -6,13 +6,38 @@ Simpl-Open lives at <https://code.europa.eu/simpl/simpl-open>. It is normally de
 
 ---
 
-## TL;DR — what this reproduces
+## Quick start — publish an SD the *intended* way (full Tier-2 mTLS mesh)
+
+One idempotent command clones the repos, applies the two local patches, builds, brings
+up the whole IAA + catalogue mesh, onboards+enrols the authority and the provider, and
+publishes a Self-Description through the real provider-agent path:
 
 ```bash
 cd simpl-open-lab/scripts
-./01-setup.sh       # install Postgres, moto, Keycloak; build the CA shim + Simpl services
+./07-tier2-provider-publish.sh     # → ends with fc-service totalCount: 1 (SD active)
+```
+
+- **Prereqs**: Java 21, Maven 3.9+, Go 1.24+, Python 3, and reachable `code.europa.eu`
+  (the EU GitLab). It starts its own Postgres (:5433) + Redis; installs nothing global
+  except Postgres if missing (run `./01-setup.sh` once first if `initdb` isn't present).
+- **Timing — be realistic**: the **first run takes ≈10–20 min** because it clones ~6
+  Simpl repos from EU GitLab and Maven-builds them (+ downloads Neo4j). It is unattended.
+  **Re-runs are fast** (seconds to a couple of minutes): jars, the persisted CA
+  (`/tmp/shim-ca.*`), and `$LAB_ROOT/src` are cached, so it only (re)starts services and
+  republishes. A brand-new machine always pays the one-time clone+build — the multi-GB
+  Simpl sources/jars are intentionally **not** committed to this repo.
+- Full architecture, the mTLS trust model, and the two required local patches:
+  **[catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md)**.
+
+## TL;DR — the layers, step by step
+
+```bash
+cd simpl-open-lab/scripts
+./01-setup.sh       # install Postgres, moto, Keycloak; clone + build the CA shim + Simpl services
 ./02-dataspace.sh   # Postgres + S3 + 2 EDC connectors -> real provider→consumer data transfer
 ./03-ga-iaa.sh      # Keycloak + CA shim + identity-provider -> issue a verified participant X.509 identity
+./06-federated-catalogue.sh   # Gaia-X catalogue: publish a Tier-A SD locally (direct ingest)
+./07-tier2-provider-publish.sh # the full provider-agent Tier-2 mTLS publish (above)
 ```
 
 Outcomes proven on a stock Linux box (Java 21, Maven 3.9, Go 1.24):

@@ -23,14 +23,31 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 RUN="$LAB_ROOT/run"; mkdir -p "$RUN"
-IAA="$LAB_ROOT/src/iaa"
+SRC="$LAB_ROOT/src"; IAA="$SRC"          # all repos clone flat under $LAB_ROOT/src/<name>
 JH=/usr/lib/jvm/java-21-openjdk-amd64
+GL="https://code.europa.eu/simpl/simpl-open"
 bg(){ setsid env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy "$@" </dev/null >>"$RUN/mesh.log" 2>&1 & disown 2>/dev/null || true; }
 up(){ curl -sk -o /dev/null "$1" 2>/dev/null; }
 waitup(){ local u="$1" n="${2:-60}"; for _ in $(seq 1 "$n"); do up "$u" && return 0; sleep 2; done; return 1; }
 
-# ── 0. infra: Postgres + Redis + Neo4j + CA shim + JWKS + OCSP + quality-scoring ──────
-bash "$(dirname "$0")/02-dataspace.sh" >/dev/null 2>&1 || true   # brings up Postgres(:5433)+moto (idempotent)
+# ── 0a. clone every repo this script needs (idempotent) ──────────────────────────────
+mkdir -p "$SRC"
+clone(){ [ -d "$SRC/$2/.git" ] || { log "cloning $2"; GIT_TERMINAL_PROMPT=0 git clone --depth 1 "$GL/$1.git" "$SRC/$2"; }; }
+clone "integration/resource-discovery/resource-catalogue/federated-catalogue/catalogue-be" catalogue-be
+clone "development/iaa/authentication_provider"       authentication_provider
+clone "development/iaa/identity-provider"             identity-provider
+clone "development/iaa/security-attributes-provider"  security-attributes-provider
+clone "development/iaa/tier2-gateway"                 tier2-gateway
+clone "governance/resource-management/metadata-description/resource-description-tooling/sd-tooling-be" sd-tooling-be
+
+# ── 0b. infra: Postgres + Redis + CA shim + JWKS + OCSP + quality-scoring ─────────────
+PGDATA=/var/lib/postgresql/lab-pgdata
+if ! PGPASSWORD=postgres psql -h 127.0.0.1 -p "$PG_PORT" -U postgres -d postgres -c 'select 1' >/dev/null 2>&1; then
+  [ -d "$PGDATA" ] || { mkdir -p "$PGDATA"; chown -R postgres:postgres "$PGDATA"; chmod 700 "$PGDATA"; runuser -u postgres -- initdb -D "$PGDATA" -A trust >/dev/null; }
+  runuser -u postgres -- pg_ctl -D "$PGDATA" -o "-p $PG_PORT -c listen_addresses=127.0.0.1" -l "$PGDATA/server.log" start
+  for _ in $(seq 1 15); do runuser -u postgres -- psql -p "$PG_PORT" -d postgres -c 'select 1' >/dev/null 2>&1 && break; sleep 1; done
+  runuser -u postgres -- psql -p "$PG_PORT" -d postgres -c "ALTER USER postgres PASSWORD 'postgres';" >/dev/null
+fi
 for db in catalogue authprovider authority_authprovider authority_securityattributesprovider; do
   runuser -u postgres -- psql -p "$PG_PORT" -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
@@ -59,8 +76,8 @@ git -C "$GW" apply --reverse --check "$REPO_LAB_DIR/iaa/patches/tier2-gateway-lo
   || git -C "$GW" apply "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch" 2>/dev/null || true
 mvnb(){ ( cd "$1" && noproxy_env mvn -q -B -ntp -DskipTests -Dspotless.check.skip=true \
   -Dspotless.apply.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true package ); }
-for svc in authentication_provider identity-provider security-attributes-provider tier2-gateway; do
-  ls "$IAA/$svc"/target/*.jar >/dev/null 2>&1 || { log "building $svc"; mvnb "$IAA/$svc"; }
+for svc in authentication_provider identity-provider security-attributes-provider tier2-gateway sd-tooling-be; do
+  ls "$SRC/$svc"/target/*.jar >/dev/null 2>&1 || { log "building $svc"; mvnb "$SRC/$svc"; }
 done
 
 jar(){ ls "$1"/target/*.jar | head -1; }
