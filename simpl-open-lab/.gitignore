@@ -8,3 +8,6 @@ keycloak*/
 neo4j-dl/
 run/
 src/
+
+# Redis dump written by redis-server at runtime
+*.rdb
