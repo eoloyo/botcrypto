@@ -1,0 +1,41 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/configurations/SchedulingConfig.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/configurations/SchedulingConfig.java
+index bb62ca4..0fe5e90 100644
+--- a/src/main/java/eu/europa/ec/simpl/authenticationprovider/configurations/SchedulingConfig.java
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/configurations/SchedulingConfig.java
+@@ -4,6 +4,7 @@ import eu.europa.ec.simpl.authenticationprovider.services.AutoInstallationServic
+ import eu.europa.ec.simpl.authenticationprovider.services.TierOnePublicKeyService;
+ import javax.sql.DataSource;
+ import lombok.RequiredArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
+ import net.javacrumbs.shedlock.core.LockProvider;
+ import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
+ import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+@@ -16,6 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
+ import org.springframework.scheduling.annotation.EnableScheduling;
+ import org.springframework.scheduling.annotation.Scheduled;
+ 
++@Slf4j
+ @Configuration
+ @EnableScheduling
+ @EnableSchedulerLock(defaultLockAtMostFor = "10m")
+@@ -42,7 +44,18 @@ public class SchedulingConfig {
+     @EventListener(ApplicationReadyEvent.class)
+     public void onStartup() {
+         syncCredentialsAndInstallLatest();
+-        tierOnePublicKeyService.sendToAuthorityTierOnePublicKey(
+-                new TierOnePublicKeyService.SendToAuthorityTierOnePublicKeyArgs.Default());
++        // Best-effort at startup: on a fresh agent no active credential exists yet (it is
++        // installed by onboarding afterwards), so the Tier-2 ephemeral-proof handshake this
++        // key-push needs cannot succeed and returns 401. Its sibling above is already
++        // try/caught for the same reason; make this one non-fatal too (the scheduled job
++        // re-attempts it once the credential is present) so ApplicationReadyEvent doesn't
++        // abort startup and take the whole app down.
++        try {
++            tierOnePublicKeyService.sendToAuthorityTierOnePublicKey(
++                    new TierOnePublicKeyService.SendToAuthorityTierOnePublicKeyArgs.Default());
++        } catch (RuntimeException e) {
++            log.warn("Startup tier-one public key push to the Governance Authority failed "
++                    + "(will be retried by the scheduled job): {}", e.getMessage());
++        }
+     }
+ }
