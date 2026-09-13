@@ -42,6 +42,8 @@ cd simpl-open-lab/scripts
   default.
 - Full architecture, the mTLS trust model, and the two required local patches:
   **[catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md)**.
+- Message broker (Kafka event flows) and running it as **Redpanda** (small, drop-in):
+  **[iaa/KAFKA-REDPANDA.md](iaa/KAFKA-REDPANDA.md)** — `bash iaa/broker.sh`.
 
 ## End-to-end: discover in the catalogue → transfer from the provider
 
