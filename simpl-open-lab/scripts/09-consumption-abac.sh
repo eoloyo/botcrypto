@@ -21,7 +21,9 @@ source "$(dirname "$0")/env.sh"
 RUN="$LAB_ROOT/run"; mkdir -p "$RUN"
 CONN="$LAB_ROOT/src/connector-be"; JAR="$CONN/target/basic-connector.jar"
 PY="$LAB_ROOT/motoenv/bin/python"   # has boto3
-bg(){ setsid env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy "$@" </dev/null >>"$RUN/09.log" 2>&1 & disown 2>/dev/null || true; }
+# noproxy_env (from env.sh) strips HTTP(S)_PROXY *and* NO_PROXY/ALL_PROXY — the EDC config
+# loader fails with "Duplicate key no.proxy" if the sandbox's duplicate no_proxy vars leak in.
+bg(){ setsid env -u JAVA_TOOL_OPTIONS noproxy_env "$@" </dev/null >>"$RUN/09.log" 2>&1 & disown 2>/dev/null || true; }
 waitport(){ for _ in $(seq 1 "${2:-60}"); do (exec 3<>/dev/tcp/127.0.0.1/$1) 2>/dev/null && { exec 3>&-; return 0; }; sleep 2; done; return 1; }
 
 [ -f "$JAR" ] || { log "connector jar missing — run 02-dataspace.sh or 08 first"; exit 1; }
