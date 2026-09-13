@@ -42,7 +42,7 @@ def extract_nonce_extnvalue(der):
 def load_known_leaves():
     # Every provider/agent leaf the lab has issued (serial -> cert).
     out = {}
-    for p in glob.glob("/tmp/prov-*.pem") + glob.glob("/tmp/agent-*.pem"):
+    for p in glob.glob("/tmp/prov-*.pem") + glob.glob("/tmp/agent-*.pem") + glob.glob("/tmp/*-leaf.pem"):
         try:
             c = x509.load_pem_x509_certificate(open(p,"rb").read())
             out[c.serial_number] = c
