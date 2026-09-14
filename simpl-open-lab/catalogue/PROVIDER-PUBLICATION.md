@@ -131,16 +131,24 @@ leaves the auth-provider). Verified live:
 
 | request | outcome |
 |---|---|
-| credential-backed read via `sd-tooling-be` → gateway `/fc/self-descriptions/{id}` | **HTTP 200** — gateway log: `Proof check required true` → `Ephemeral proof is valid, proceeding` → routed to fc-service |
+| credential-backed read via `sd-tooling-be` → gateway `/fc/self-descriptions/{id}` | **HTTP 200** — gateway log: `Proof check required true` → `Ephemeral proof is valid, proceeding` → `AbacFilter` admits → routed to fc-service |
 | same read straight at `:8443` with **no client certificate** | **rejected at the TLS handshake** (`tlsv13 alert certificate required`, curl `000`) |
+| same identity but proof **without** the required attribute | **HTTP 403** — `You must have one of these identity attributes to perform this action, [ CONSUMER ]` |
 | direct `GET :8081/self-descriptions/{id}` (the `08` shortcut) | **HTTP 200** — fc-service has no app security |
 
-So the read is gated by the same perimeter as publish: **mTLS (required) + a valid ephemeral
-proof** bound to the credential's key. The gateway's `AbacFilter` also runs on `/fc` reads and
-decides on the ephemeral-proof's SAP-issued `identityAttributes`; in this lab the provider's proof
-carries **none** (an empty attribute set — the same reason publish passes `/fc` today), so no
-identity-attribute rule is set on `/fc` (one would need SAP-seeded attributes). The
-attribute-level allow/deny is exactly what `09` demonstrates at the connector.
+So the read is gated by the full perimeter: **mTLS (required) + a valid ephemeral proof** bound to
+the credential's key, **plus identity-attribute ABAC** on a genuinely SAP-issued attribute. The
+`/fc` read rule requires the `CONSUMER` attribute (a non-assignable-to-roles *machine* right —
+the gateway `HeadersFilter` injects only the proof's non-assignable attributes for a
+machine-to-machine call; assignable roles like `CATALOGUE_SEARCHER`/`DATA_SEARCHER` come from a
+human's Tier-One session). `CONSUMER` is assigned in SAP (`iaa/seed-sap-attributes.sh` →
+`participant_identity_attribute`) and synced by the GA into the proof; `10` toggles the assignment
+to show **allow with it / deny without it** — decided on an *issued* attribute, not a mock. This is
+the authenticity upgrade over `09` (which flips a mocked connector attribute). Two upstream
+simplifications remain: SAP's `findParticipant(credentialId)` is a stub that returns the first
+participant, and the connector's own `SimplIdentityService` still trusts its token — so the
+attributes are authentically *sourced and enforced* here, but full peer-identity verification is
+still an upstream `basic-connector` limitation.
 
 ## Status in this lab
 

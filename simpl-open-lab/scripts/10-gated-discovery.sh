@@ -23,10 +23,16 @@
 #       enforces mTLS as REQUIRED, so an un-credentialed caller never reaches HTTP at all.
 #   (3) CONTRAST — a direct GET :8081/self-descriptions/{id} returns 200 (fc-service itself has no
 #       app security), which is the shortcut 08 uses — proving the gateway is the real gate.
+#   (4) AUTHENTIC ABAC — the gateway /fc rule requires the SAP-issued machine attribute CONSUMER
+#       (a non-assignable-to-roles agent right; the gateway HeadersFilter injects only the proof's
+#       non-assignable attributes for a machine-to-machine call). Toggling the SAP assignment and
+#       forcing a fresh proof shows AbacFilter ALLOW (proof carries CONSUMER -> 200) vs DENY (proof
+#       without it -> 403 "You must have one of these identity attributes, [ CONSUMER ]"). This is
+#       decided on a genuinely ISSUED attribute, not a mock — the authenticity upgrade over 09.
 #
 # Prereq (idempotent): if the mesh/catalogue isn't up it runs 07 (which clones+builds the mesh,
-# applies the patches — including sdtooling-fc-read — enrolls the provider, caches its ephemeral
-# proof, and publishes an SD through the Tier-2 mTLS path).
+# applies the patches — including sdtooling-fc-read — enrolls the provider, seeds the CONSUMER SAP
+# attribute, caches its ephemeral proof, and publishes an SD through the Tier-2 mTLS path).
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 RUN="$LAB_ROOT/run"; mkdir -p "$RUN"
@@ -61,7 +67,27 @@ for it in d.get('items',[]):
 [ -n "$SDID" ] || { log "could not read a self-description id from the catalogue"; exit 1; }
 log "target self-description id = $SDID"
 
-# ── 3. POSITIVE: credential-backed READ through the gateway (mTLS + ephemeral proof [+ ABAC]) ──
+# helpers for the SAP-governed machine attribute + a forced proof refresh (used by the positive
+# read below and the authentic-ABAC toggle in step 6). CONSUMER is a non-assignable machine
+# attribute; the gateway /fc rule requires it (see iaa/inject-fc-abac-rule.sh).
+ATTR="CONSUMER"
+PUUID=$(cat /tmp/last-uuid.txt 2>/dev/null || true)
+SAPDB="authority_securityattributesprovider"
+sap(){ PGPASSWORD=postgres psql -h 127.0.0.1 -p "${PG_PORT:-5433}" -U postgres -d "$SAPDB" -tAc "$1" 2>/dev/null; }
+clear_proof_cache(){ local db k
+  for db in $(seq 0 15); do
+    redis-cli -p 30379 -a admin --no-auth-warning -n "$db" --scan --pattern 'ephemeralProof*' 2>/dev/null \
+      | while read -r k; do [ -n "$k" ] && redis-cli -p 30379 -a admin --no-auth-warning -n "$db" del "$k" >/dev/null 2>&1; done
+  done; }
+reissue(){ clear_proof_cache
+  local tok; tok=$(python3 "$HERE/../iaa/jwks-tier1.py" token "$PUUID" 2>/dev/null) || return 1
+  curl -s -o /dev/null -H "Authorization: Bearer $tok" http://localhost:8104/tier1/v2/ephemeralProof 2>/dev/null || true; sleep 3; }
+discover_code(){ curl -s -o /dev/null -w '%{http_code}' "$SDT/v1/selfDescriptions/discover/$SDID" 2>/dev/null || echo 000; }
+ABAC_AVAIL=0; [ -n "$PUUID" ] && [ -n "$(sap 'select 1')" ] && ABAC_AVAIL=1
+# ensure the current proof carries the SAP-issued machine attribute before the positive read
+if [ "$ABAC_AVAIL" = 1 ]; then bash "$HERE/../iaa/seed-sap-attributes.sh" "$ATTR" >/dev/null 2>&1 || true; reissue; fi
+
+# ── 3. POSITIVE: credential-backed READ through the gateway (mTLS + ephemeral proof + ABAC) ──
 log "── POSITIVE: GET $SDT/v1/selfDescriptions/discover/{id}  (credential-backed, via gateway /fc) ──"
 POS=$(curl -s -o "$RUN/10-discover-body.json" -w '%{http_code}' "$SDT/v1/selfDescriptions/discover/$SDID" || echo 000)
 BODYLEN=$(wc -c < "$RUN/10-discover-body.json" 2>/dev/null || echo 0)
@@ -91,40 +117,38 @@ DIR=$(curl -s -o /dev/null -w '%{http_code}' "$CAT/self-descriptions/$SDID" || e
 log "── CONTRAST: GET $CAT/self-descriptions/{id} direct -> HTTP $DIR  (fc-service has no app security) ──"
 
 # ── 6. AUTHENTIC ABAC on discovery (identity-attribute layer, on SAP-issued proof attributes) ──
-# The gateway /fc read rule requires the CATALOGUE_SEARCHER identity attribute. That attribute is
-# SAP-governed: it is assigned in SAP (iaa/seed-sap-attributes.sh) and synced into the participant's
-# ephemeral proof by the GA. To show the gateway AbacFilter deciding on the AUTHENTIC attribute
-# (not a mock), toggle the SAP assignment and re-issue the proof:
-#   DENY  — strip the attribute  -> proof carries []                -> AbacFilter 403 (read fails)
-#   ALLOW — assign CATALOGUE_SEARCHER -> proof carries it           -> read 200
-PUUID=$(cat /tmp/last-uuid.txt 2>/dev/null || true)
-SAPDB="authority_securityattributesprovider"
-sap(){ PGPASSWORD=postgres psql -h 127.0.0.1 -p "${PG_PORT:-5433}" -U postgres -d "$SAPDB" -tAc "$1" 2>/dev/null; }
-reissue(){ local tok; tok=$(python3 "$HERE/../iaa/jwks-tier1.py" token "$PUUID" 2>/dev/null) || return 1
-  curl -s -o /dev/null -H "Authorization: Bearer $tok" http://localhost:8104/tier1/v2/ephemeralProof 2>/dev/null || true; sleep 3; }
-discover_code(){ curl -s -o /dev/null -w '%{http_code}' "$SDT/v1/selfDescriptions/discover/$SDID" 2>/dev/null || echo 000; }
+# The gateway /fc read rule requires the CONSUMER identity attribute. CONSUMER is a NON-assignable-
+# to-roles (machine/agent) attribute — the gateway HeadersFilter injects only the proof's
+# non-assignable attributes as USER_ATTRIBUTES for a machine-to-machine call (assignable roles like
+# CATALOGUE_SEARCHER come from a human's Tier-One session, absent here). CONSUMER is SAP-governed:
+# assigned in SAP (iaa/seed-sap-attributes.sh) and synced by the GA into the participant's ephemeral
+# proof. Toggle the SAP assignment + force a fresh proof (clear the cached proofs so the GA re-syncs
+# from SAP without waiting out the ~60s TTL), and read:
+#   DENY  — strip CONSUMER  -> proof carries no machine attribute -> AbacFilter 403
+#   ALLOW — assign CONSUMER -> proof carries CONSUMER             -> read 200
+# (helpers sap/clear_proof_cache/reissue/discover_code + ATTR/PUUID are defined above step 3)
 ABAC_OK=0; ABAC_RUN=0
-if [ -n "$PUUID" ] && [ -n "$(sap 'select 1')" ]; then
+if [ "$ABAC_AVAIL" = 1 ]; then
   ABAC_RUN=1
-  log "── AUTHENTIC ABAC: gateway /fc rule requires CATALOGUE_SEARCHER (a SAP-issued proof attribute) ──"
-  sap "DELETE FROM participant_identity_attribute;" >/dev/null; reissue
+  log "── AUTHENTIC ABAC: gateway /fc rule requires the SAP-issued machine attribute $ATTR ──"
+  sap "DELETE FROM participant_identity_attribute WHERE identity_attribute_id=(SELECT id FROM identity_attribute WHERE code='$ATTR');" >/dev/null; reissue
   DENYC=$(discover_code)
-  log "   proof without the attribute -> discover HTTP $DENYC  (expect non-200: AbacFilter denies)"
-  grep -aE "identity attributes to perform this action|require one of these identity attributes" "$MESHLOG" 2>/dev/null | tail -1 | sed 's/^.*] //; s/^/   gw| /' || true
-  bash "$HERE/../iaa/seed-sap-attributes.sh" CATALOGUE_SEARCHER >/dev/null 2>&1 || true; reissue
+  log "   proof WITHOUT $ATTR -> discover HTTP $DENYC  (expect non-200: AbacFilter denies)"
+  grep -aoE "identity attributes to perform this action, \[ $ATTR \]" "$MESHLOG" 2>/dev/null | tail -1 | sed 's/^/   gw| 403: /' || true
+  bash "$HERE/../iaa/seed-sap-attributes.sh" "$ATTR" >/dev/null 2>&1 || true; reissue
   ALLOWC=$(discover_code)
-  log "   proof WITH CATALOGUE_SEARCHER -> discover HTTP $ALLOWC  (expect 200: AbacFilter admits the authentic attribute)"
+  log "   proof WITH $ATTR -> discover HTTP $ALLOWC  (expect 200: AbacFilter admits the authentic attribute)"
   if [ "$ALLOWC" = 200 ] && [ "$DENYC" != 200 ]; then
-    ABAC_OK=1; log "   ✓ authentic identity-attribute ABAC enforced on discovery (allow with the SAP-issued attribute, deny without)"
+    ABAC_OK=1; log "   ✓ authentic identity-attribute ABAC enforced on discovery (allow with the SAP-issued $ATTR, deny without)"
   else
-    log "   ⚠ ABAC allow/deny inconclusive (allow=$ALLOWC deny=$DENYC) — proof may not have re-synced; see $RUN/mesh.log"
+    log "   ⚠ ABAC allow/deny inconclusive (allow=$ALLOWC deny=$DENYC) — see $RUN/mesh.log"
   fi
 fi
 
 # ── verdict ───────────────────────────────────────────────────────────────────────────
 if [ "$POS_OK" = 1 ] && [ "$NEG_OK" = 1 ]; then
   log "GATED DISCOVERY VERIFIED — catalogue read succeeds only through the Tier-2 perimeter (200 with a machine credential + valid ephemeral proof; rejected at TLS without one); a direct fc-service read is the 08 shortcut."
-  [ "$ABAC_RUN" = 1 ] && { [ "$ABAC_OK" = 1 ] && log "AUTHENTIC ABAC ON DISCOVERY VERIFIED — the gateway admits the read only with the SAP-issued CATALOGUE_SEARCHER attribute in the proof." || log "NOTE: authentic-ABAC allow/deny was inconclusive this run (mTLS + ephemeral-proof gate is still verified)."; }
+  [ "$ABAC_RUN" = 1 ] && { [ "$ABAC_OK" = 1 ] && log "AUTHENTIC ABAC ON DISCOVERY VERIFIED — the gateway admits the read only with the SAP-issued $ATTR attribute in the proof." || log "NOTE: authentic-ABAC allow/deny was inconclusive this run (mTLS + ephemeral-proof gate is still verified)."; }
 else
   log "GATED DISCOVERY INCOMPLETE — POSITIVE(200)=$POS_OK NEGATIVE(blocked)=$NEG_OK ; see $RUN/mesh.log"
   exit 1

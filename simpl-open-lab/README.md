@@ -98,7 +98,7 @@ cd simpl-open-lab/scripts
 ./07-tier2-provider-publish.sh # the full provider-agent Tier-2 mTLS publish (above)
 ./08-discover-and-transfer.sh  # consumer discovers the SD in the catalogue -> transfers from the provider
 ./09-consumption-abac.sh       # consumption ABAC: CONSUMER may transact, DATA_SEARCHER is denied
-./10-gated-discovery.sh        # catalogue READ through the Tier-2 gateway (mTLS + ephemeral proof)
+./10-gated-discovery.sh        # catalogue READ gated by the Tier-2 gateway (mTLS + ephemeral proof + ABAC on a SAP-issued attribute)
 ```
 
 Outcomes proven on a stock Linux box (Java 21, Maven 3.9, Go 1.24):

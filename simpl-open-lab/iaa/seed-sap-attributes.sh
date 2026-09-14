@@ -16,7 +16,11 @@
 set -euo pipefail
 source "$(dirname "$0")/../scripts/env.sh" 2>/dev/null || true
 PGP="${PG_PORT:-5433}"
-CODE="${1:-CATALOGUE_SEARCHER}"   # the attribute code to assign (default: the catalogue-searcher right)
+# Default CONSUMER: a NON-assignable-to-roles machine/agent attribute. The gateway HeadersFilter
+# injects only the proof's non-assignable attributes as USER_ATTRIBUTES for a machine-to-machine
+# call (assignable ones such as CATALOGUE_SEARCHER/DATA_SEARCHER come from a human's Tier-One
+# session). So the /fc read gate must require a non-assignable code (CONSUMER/DATA_PROVIDER/...).
+CODE="${1:-CONSUMER}"
 log(){ printf '\033[1;34m[seed-sap]\033[0m %s\n' "$*"; }
 
 # 1) participant ids known to the identity-provider (what SAP's listParticipants sees)
@@ -30,11 +34,13 @@ log "identity-provider participants: $(echo "$PIDS" | tr '\n' ' ')"
 export PGPASSWORD=postgres
 psql -h 127.0.0.1 -p "$PGP" -U postgres -d authority_securityattributesprovider -v ON_ERROR_STOP=1 <<SQL
 -- the default changelog seeds CATALOGUE_SEARCHER; insert defensively if a stripped schema lacks it
+-- the built-in machine attributes (CONSUMER, DATA_PROVIDER, ...) are seeded by SAP's own
+-- changelogs; insert defensively (non-assignable = machine right) only if a stripped schema lacks it
 INSERT INTO identity_attribute (id, code, "name", description, assignable_to_roles, enabled,
                                 creation_timestamp, update_timestamp, is_right, built_in, public, federable)
 SELECT gen_random_uuid(), '$CODE', initcap(replace('$CODE','_',' ')),
-       'act only as a searcher in the catalogue, cannot start a contract negotiation or transfer',
-       TRUE, TRUE, now(), now(), TRUE, TRUE, TRUE, TRUE
+       'machine/agent identity attribute',
+       FALSE, TRUE, now(), now(), FALSE, TRUE, TRUE, TRUE
 WHERE NOT EXISTS (SELECT 1 FROM identity_attribute WHERE code='$CODE');
 SQL
 
