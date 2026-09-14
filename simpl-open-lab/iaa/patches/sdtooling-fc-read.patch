@@ -1,0 +1,94 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDController.java b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDController.java
+index 2c4350b..97c4549 100644
+--- a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDController.java
++++ b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDController.java
+@@ -13,6 +13,8 @@ import jakarta.servlet.http.HttpServletRequest;
+ import java.io.IOException;
+ import org.springframework.http.MediaType;
+ import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.GetMapping;
++import org.springframework.web.bind.annotation.PathVariable;
+ import org.springframework.web.bind.annotation.PostMapping;
+ import org.springframework.web.bind.annotation.RequestBody;
+ import org.springframework.web.bind.annotation.RequestMapping;
+@@ -613,4 +615,15 @@ public interface SDController {
+                     String payload,
+             HttpServletRequest httpRequest)
+             throws IOException;
++
++    @Operation(
++            summary = "Discover (read) a self-description through the Tier-2 gateway",
++            description =
++                    "Reads a self-description from the Federated Catalogue via the credential-backed "
++                            + "FederatedCatalogueTier2Client, i.e. through the Tier-2 gateway perimeter "
++                            + "(mTLS + ephemeral proof + ABAC) — the gated read counterpart of publish.",
++            responses = {@ApiResponse(responseCode = "200", description = "Self-description content")})
++    @GetMapping(path = "/discover/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
++    ResponseEntity<String> discover(
++            @Parameter(description = "self-description id", required = true) @PathVariable String id);
+ }
+diff --git a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDControllerImpl.java b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDControllerImpl.java
+index 30e5d14..f5525bc 100644
+--- a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDControllerImpl.java
++++ b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/controller/v1/SDControllerImpl.java
+@@ -34,6 +34,13 @@ public class SDControllerImpl extends AbstractController implements SDController
+         return ResponseEntity.ok(result.toString());
+     }
+ 
++    @LogRequest
++    @Override
++    public ResponseEntity<String> discover(String id) {
++        String result = resourceDescriptionService.discoverSelfDescription(id);
++        return ResponseEntity.ok(result);
++    }
++
+     @LogRequest
+     @Override
+     public ResponseEntity<String> finalized(String schemaId, String payload, HttpServletRequest httpRequest)
+diff --git a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionService.java b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionService.java
+index 7eb9114..65ac93f 100644
+--- a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionService.java
++++ b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionService.java
+@@ -46,6 +46,17 @@ public interface ResourceDescriptionService {
+      */
+     JsonNode publishSignedResourceDescription(JsonNode signedPayload, String bearerToken);
+ 
++    /**
++     * Discover (read) a self-description from the Federated Catalogue THROUGH the Tier-2 gateway,
++     * using the FederatedCatalogueTier2Client (the same credential-backed mTLS + ephemeral-proof
++     * path as publish). This exercises the gated *read* perimeter, as opposed to
++     * {@link #getResourceDescription(String)} which goes through the catalogue-adapter client.
++     *
++     * @param selfDescriptionId the self-description id to fetch
++     * @return the self-description content as returned by fc-service
++     */
++    String discoverSelfDescription(String selfDescriptionId);
++
+     /**
+      * Revokes a resource description identified by its unique ID, marking it as no longer valid,
+      * using the CatalogueAdapterTier2Client.
+diff --git a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionServiceImpl.java b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionServiceImpl.java
+index ce5cd6d..8680a00 100644
+--- a/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionServiceImpl.java
++++ b/src/main/java/eu/europa/ec/simpl/sdtoolingbe/service/resourcedescription/ResourceDescriptionServiceImpl.java
+@@ -78,6 +78,20 @@ public class ResourceDescriptionServiceImpl implements ResourceDescriptionServic
+         }
+     }
+ 
++    @Override
++    public String discoverSelfDescription(String selfDescriptionId) {
++        try {
++            log.debug(
++                    "discoverSelfDescription(): invoking federatedCatalogueTier2Client.getSelfDescription({}) through the Tier-2 gateway",
++                    selfDescriptionId);
++            return federatedCatalogueTier2Client.getSelfDescription(selfDescriptionId);
++        } catch (FeignException e) {
++            log.error("discoverSelfDescription() failed cause FeignException", e);
++            throw RemoteServiceUtil.toRemoteServiceErrorException(
++                    CommonErrorType.REMOTE_FEDERATED_CATALOGUE_ERROR, null, e);
++        }
++    }
++
+     @Override
+     public String getAllResourceDescriptionsByVersion(String resourceDescriptionId, Integer page, Integer pageSize)
+             throws RemoteServiceUnauthorizedException {

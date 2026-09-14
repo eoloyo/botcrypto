@@ -86,6 +86,10 @@ applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch"
 applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-fc-route.patch"
 # auth-provider: make the startup tier-one key-push non-fatal (so :8104 boots on a fresh agent)
 applypatch "$IAA/authentication_provider" "$REPO_LAB_DIR/iaa/patches/authprovider-startup-keypush-nonfatal.patch"
+# sd-tooling-be: add GET /v1/selfDescriptions/discover/{id} — a credential-backed catalogue READ
+# through the Tier-2 gateway (FederatedCatalogueTier2Client.getSelfDescription), so discovery is
+# gated by the same mTLS + ephemeral-proof + ABAC perimeter as publish (see 10-gated-discovery.sh)
+applypatch "$SRC/sd-tooling-be" "$REPO_LAB_DIR/iaa/patches/sdtooling-fc-read.patch"
 mvnb(){ ( cd "$1" && noproxy_env mvn -q -B -ntp -DskipTests -Dspotless.check.skip=true \
   -Dspotless.apply.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true package ); }
 
