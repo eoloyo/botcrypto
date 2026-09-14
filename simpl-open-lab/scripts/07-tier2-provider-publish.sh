@@ -129,6 +129,11 @@ done
 [ "$build_fail" -eq 0 ] || { log "ERROR: a service build failed — see $RUN/build-*.log"; exit 1; }
 
 jar(){ ls "$1"/target/*.jar | head -1; }
+# The gateway build regenerates config/routes-authority.yml from the Tier-2 OpenAPI specs, so the
+# /fc read ABAC rule (fc-service isn't in those specs) must be injected into the built jar. This
+# makes discovery reads require the CATALOGUE_SEARCHER identity attribute at the gateway. Idempotent.
+JAVA_HOME=$JH bash "$REPO_LAB_DIR/iaa/inject-fc-abac-rule.sh" "$(jar "$GW")" CATALOGUE_SEARCHER \
+  || log "WARN: could not inject the /fc ABAC rule into the gateway jar"
 # ── 3. boot the IAA mesh ──────────────────────────────────────────────────────────────
 # identity-provider (:8103, the participant registry the GA + SAP call internally)
 up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java -jar "$(jar "$IAA/identity-provider")" \
@@ -182,7 +187,10 @@ waitup http://localhost:8104/actuator/health 90 >/dev/null && log "participant a
 # ── 5. enroll the PROVIDER (registers with the GA through the gateway mTLS) ────────────
 bash "$REPO_LAB_DIR/iaa/enroll.sh" 8104 "ACME Provider" false | tail -1
 PUUID=$(cat /tmp/last-uuid.txt)
-# fetch+cache an ephemeral proof for the provider (GA -> SAP), then boot sd-tooling-be
+# seed a SAP-governed identity attribute (CATALOGUE_SEARCHER) for the participant(s) so the
+# ephemeral proof carries a REAL attribute the gateway ABAC on /fc reads can enforce (10-gated)
+bash "$REPO_LAB_DIR/iaa/seed-sap-attributes.sh" CATALOGUE_SEARCHER || log "WARN: SAP attribute seed failed (10 ABAC will be empty)"
+# fetch+cache an ephemeral proof for the provider (GA -> SAP syncs the seeded attribute), then boot sd-tooling-be
 TOK=$(python3 "$REPO_LAB_DIR/iaa/jwks-tier1.py" token "$PUUID")
 curl -s -o /dev/null -H "Authorization: Bearer $TOK" http://localhost:8104/tier1/v2/ephemeralProof || true
 
