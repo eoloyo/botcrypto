@@ -81,8 +81,13 @@ log "provider: asset + open access policy + CONSUMER-constrained contract policy
 curl -s "${H[@]}" -X POST $P/assets -d '{"@context":'"$V"',"@id":"abac-asset","properties":{"name":"ABAC demo"},"dataAddress":{"type":"MinioS3","bucketName":"provider-bucket","objectName":"example-s3.txt","endpoint":"http://localhost:'"$MOTO_PORT"'","region":"us-east-1","accessKeyId":"minioadmin","secretAccessKey":"minioadmin"}}' >/dev/null || true
 # access policy: open (so a searcher can still SEE the offer in the catalog)
 curl -s "${H[@]}" -X POST $P/policydefinitions -d '{"@context":'"$V"',"@id":"open-access","policy":{"@context":"http://www.w3.org/ns/odrl.jsonld","@type":"Set","permission":[{"action":"use"}]}}' >/dev/null || true
-# contract policy: require the CONSUMER identity attribute to negotiate (consumption eq CONSUMER)
-curl -s "${H[@]}" -X POST $P/policydefinitions -d '{"@context":{"@vocab":"https://w3id.org/edc/v0.0.1/ns/","odrl":"http://www.w3.org/ns/odrl/2/"},"@id":"consumer-only","policy":{"@context":"http://www.w3.org/ns/odrl.jsonld","@type":"Set","permission":[{"action":"use","constraint":{"@type":"AtomicConstraint","leftOperand":"consumption","operator":{"@id":"odrl:eq"},"rightOperand":"CONSUMER"}}]}}' >/dev/null || true
+# contract policy: require the CONSUMER identity attribute to negotiate (consumption eq CONSUMER).
+# leftOperand is the FULL IRI the connector's PolicyFunctionsExtension binds to NEGOTIATION_SCOPE
+# (https://w3id.org/edc/v0.0.1/ns/consumption) — a bare "consumption" under the ODRL @context would
+# expand to odrl:consumption instead, so EDC's offer-equivalence check fails and the negotiation
+# TERMINATES before the ConsumptionConstraintFunction is ever evaluated. The consumer's
+# ContractRequest below uses the identical IRI so the offer matches and the function fires.
+curl -s "${H[@]}" -X POST $P/policydefinitions -d '{"@context":{"@vocab":"https://w3id.org/edc/v0.0.1/ns/","odrl":"http://www.w3.org/ns/odrl/2/"},"@id":"consumer-only","policy":{"@context":"http://www.w3.org/ns/odrl.jsonld","@type":"Set","permission":[{"action":"use","constraint":{"@type":"AtomicConstraint","leftOperand":"https://w3id.org/edc/v0.0.1/ns/consumption","operator":{"@id":"odrl:eq"},"rightOperand":"CONSUMER"}}]}}' >/dev/null || true
 curl -s "${H[@]}" -X POST $P/contractdefinitions -d '{"@context":'"$V"',"@id":"abac-cdef","accessPolicyId":"open-access","contractPolicyId":"consumer-only","assetsSelector":[]}' >/dev/null || true
 
 # ── run one negotiation as a given identity, report ALLOW/DENY ────────────────────────
@@ -110,11 +115,18 @@ V={"@vocab":"https://w3id.org/edc/v0.0.1/ns/"}
 cat=call(f"{C}/catalog/request",{"@context":V,"@type":"CatalogRequest","counterPartyAddress":PROTO,"protocol":"dataspace-protocol-http"})
 ds=cat.get("dcat:dataset"); ds=ds[0] if isinstance(ds,list) else ds
 print(f"   catalog: offer visible = {bool(ds)} (access policy is open, so a searcher SEES it)")
-# Echo the EXACT offer policy the catalog advertised (the provider serialized it with the
-# right IRI expansion, e.g. edc:consumption), rather than hand-building one — otherwise the
-# provider's offer validation fails and it TERMINATES before evaluating the constraint.
+# Hand-build the ContractRequest offer in the shape the management API accepts (same as 02/08),
+# echoing the catalog offer's @id so it references the advertised offer, and carrying the
+# consumption constraint with the FULL IRI leftOperand so it matches what the provider stored
+# (see the provider policydefinitions POST above). This makes EDC's offer-equivalence check pass,
+# so the connector actually invokes ConsumptionConstraintFunction on the identity_attributes claim.
 off=ds["odrl:hasPolicy"]; off=off[0] if isinstance(off,list) else off; offer_id=off["@id"]
-policy=dict(off); policy["@type"]="Offer"; policy.setdefault("assigner","provider"); policy["target"]="abac-asset"
+asset_id=ds.get("@id") or ds.get("id")
+policy={"@context":"http://www.w3.org/ns/odrl.jsonld","@id":offer_id,"@type":"Offer",
+        "assigner":"provider","target":asset_id,
+        "permission":[{"action":"use","constraint":{"@type":"AtomicConstraint",
+            "leftOperand":"https://w3id.org/edc/v0.0.1/ns/consumption","operator":{"@id":"odrl:eq"},
+            "rightOperand":"CONSUMER"}}],"prohibition":[],"obligation":[]}
 neg=call(f"{C}/contractnegotiations",{"@context":{**V,"odrl":"http://www.w3.org/ns/odrl/2/"},"@type":"ContractRequest","counterPartyAddress":PROTO,"protocol":"dataspace-protocol-http","policy":policy})
 nid=neg["@id"]; state=None; agree=None
 for _ in range(20):
