@@ -74,8 +74,10 @@ provider** — joining the two discovery layers the other scripts run separately
 > **CONSUMER → agreement, DATA_SEARCHER → negotiation TERMINATED** — decided by the connector's
 > own shipped `ConsumptionConstraintFunction`. `08` above leaves that gate off (direct
 > `fc-service` query + the basic-connector's mocked/non-verifying identity), so its transfer is
-> open on purpose. See [catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md) →
-> "Consumption is gated too" for what `09` proves vs. the remaining authenticity gap.
+> open on purpose; `./10-gated-discovery.sh` shows the gated variant of the *read* — a catalogue
+> discovery through the Tier-2 gateway (mTLS + ephemeral proof, HTTP 200 with a machine identity,
+> rejected at TLS without one). See [catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md) →
+> "Consumption is gated too" for what `09`/`10` prove vs. the remaining authenticity gap.
 
 `08` is idempotent and brings up its own prerequisites: if the catalogue is empty it runs
 `07` (or you can seed it faster with `06`), and it builds `connector-be` + runs `02` for the
@@ -96,6 +98,7 @@ cd simpl-open-lab/scripts
 ./07-tier2-provider-publish.sh # the full provider-agent Tier-2 mTLS publish (above)
 ./08-discover-and-transfer.sh  # consumer discovers the SD in the catalogue -> transfers from the provider
 ./09-consumption-abac.sh       # consumption ABAC: CONSUMER may transact, DATA_SEARCHER is denied
+./10-gated-discovery.sh        # catalogue READ through the Tier-2 gateway (mTLS + ephemeral proof)
 ```
 
 Outcomes proven on a stock Linux box (Java 21, Maven 3.9, Go 1.24):

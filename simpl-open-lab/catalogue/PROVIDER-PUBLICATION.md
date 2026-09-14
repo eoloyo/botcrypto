@@ -120,9 +120,27 @@ stub** (deserializes + trusts the token — no signature, no OCSP, no mTLS). Sou
 attributes *authentically* — the agent fetching its **own** governed attributes over the Tier-2
 mesh — is the upgrade on top, captured in `iaa/patches/connector-tier2-identity.patch`
 (`SimplIdentityService` fetches from the authentication-provider's
-`/participant/identityAttributes`, filtered by `assignedToParticipant`). Likewise `08`'s
-*discovery* still queries `fc-service` **directly**, bypassing the gateway perimeter; gating that
-read through the Tier-2 gateway (mTLS + ABAC) is the remaining discovery-side hardening.
+`/participant/identityAttributes`, filtered by `assignedToParticipant`).
+
+**The gated discovery read (`scripts/10-gated-discovery.sh`).** `08`'s *discovery* queries
+`fc-service` **directly** on `:8081` (the shortcut). `10` shows the faithful path: a catalogue
+**read** through the Tier-2 gateway with a real machine identity, using the connector library's
+own credential-backed client (`FederatedCatalogueTier2Client.getSelfDescription`, driven via a
+thin sd-tooling-be endpoint added in `iaa/patches/sdtooling-fc-read.patch`; the sealed key never
+leaves the auth-provider). Verified live:
+
+| request | outcome |
+|---|---|
+| credential-backed read via `sd-tooling-be` → gateway `/fc/self-descriptions/{id}` | **HTTP 200** — gateway log: `Proof check required true` → `Ephemeral proof is valid, proceeding` → routed to fc-service |
+| same read straight at `:8443` with **no client certificate** | **rejected at the TLS handshake** (`tlsv13 alert certificate required`, curl `000`) |
+| direct `GET :8081/self-descriptions/{id}` (the `08` shortcut) | **HTTP 200** — fc-service has no app security |
+
+So the read is gated by the same perimeter as publish: **mTLS (required) + a valid ephemeral
+proof** bound to the credential's key. The gateway's `AbacFilter` also runs on `/fc` reads and
+decides on the ephemeral-proof's SAP-issued `identityAttributes`; in this lab the provider's proof
+carries **none** (an empty attribute set — the same reason publish passes `/fc` today), so no
+identity-attribute rule is set on `/fc` (one would need SAP-seeded attributes). The
+attribute-level allow/deny is exactly what `09` demonstrates at the connector.
 
 ## Status in this lab
 
