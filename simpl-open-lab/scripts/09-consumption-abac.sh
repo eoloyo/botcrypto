@@ -87,7 +87,7 @@ curl -s "${H[@]}" -X POST $P/contractdefinitions -d '{"@context":'"$V"',"@id":"a
 
 # ── run one negotiation as a given identity, report ALLOW/DENY ────────────────────────
 run_case(){ # run_case <CODE> <expect: ALLOW|DENY>
-  local code="$1" expect="$2" cfg="$RUN/consumer-$code.properties"
+  local code="$1" expect="$2"; local cfg="$RUN/consumer-$code.properties"
   cp "$CONN/local/consumer-config.properties" "$cfg"
   local mock; mock="$(mock_for "$code")"
   sed -i "s#^mocked.agent.identity.attributes=.*#mocked.agent.identity.attributes=$mock#" "$cfg"
