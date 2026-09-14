@@ -110,8 +110,12 @@ V={"@vocab":"https://w3id.org/edc/v0.0.1/ns/"}
 cat=call(f"{C}/catalog/request",{"@context":V,"@type":"CatalogRequest","counterPartyAddress":PROTO,"protocol":"dataspace-protocol-http"})
 ds=cat.get("dcat:dataset"); ds=ds[0] if isinstance(ds,list) else ds
 print(f"   catalog: offer visible = {bool(ds)} (access policy is open, so a searcher SEES it)")
+# Echo the EXACT offer policy the catalog advertised (the provider serialized it with the
+# right IRI expansion, e.g. edc:consumption), rather than hand-building one — otherwise the
+# provider's offer validation fails and it TERMINATES before evaluating the constraint.
 off=ds["odrl:hasPolicy"]; off=off[0] if isinstance(off,list) else off; offer_id=off["@id"]
-neg=call(f"{C}/contractnegotiations",{"@context":{**V,"odrl":"http://www.w3.org/ns/odrl/2/"},"@type":"ContractRequest","counterPartyAddress":PROTO,"protocol":"dataspace-protocol-http","policy":{"@context":"http://www.w3.org/ns/odrl.jsonld","@id":offer_id,"@type":"Offer","assigner":"provider","target":"abac-asset","permission":[{"action":"use","constraint":{"@type":"AtomicConstraint","leftOperand":"consumption","operator":{"@id":"odrl:eq"},"rightOperand":"CONSUMER"}}]}})
+policy=dict(off); policy["@type"]="Offer"; policy.setdefault("assigner","provider"); policy["target"]="abac-asset"
+neg=call(f"{C}/contractnegotiations",{"@context":{**V,"odrl":"http://www.w3.org/ns/odrl/2/"},"@type":"ContractRequest","counterPartyAddress":PROTO,"protocol":"dataspace-protocol-http","policy":policy})
 nid=neg["@id"]; state=None; agree=None
 for _ in range(20):
     st=gett(f"{C}/contractnegotiations/{nid}"); state=st.get("state"); agree=st.get("contractAgreementId")
