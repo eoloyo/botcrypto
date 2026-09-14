@@ -31,8 +31,19 @@ waitport(){ for _ in $(seq 1 "${2:-60}"); do (exec 3<>/dev/tcp/127.0.0.1/$1) 2>/
 [ -f "$JAR" ] || { log "connector jar missing — run 02-dataspace.sh or 08 first"; exit 1; }
 
 # ── infra: Postgres (providerdb), moto S3 + buckets ───────────────────────────────────
-"$LAB_ROOT/motoenv/bin/moto_server" -p "$MOTO_PORT" -H 127.0.0.1 >>"$RUN/moto.log" 2>&1 &
-waitport "$MOTO_PORT" 20 || true
+# ensure Postgres :5433 is up (the EDC connector's store) — it may be down between runs
+PGDATA=/var/lib/postgresql/lab-pgdata
+if ! PGPASSWORD=postgres psql -h 127.0.0.1 -p "$PG_PORT" -U postgres -d postgres -c 'select 1' >/dev/null 2>&1; then
+  [ -d "$PGDATA" ] || { mkdir -p "$PGDATA"; chown -R postgres:postgres "$PGDATA"; chmod 700 "$PGDATA"; runuser -u postgres -- initdb -D "$PGDATA" -A trust >/dev/null; }
+  runuser -u postgres -- pg_ctl -D "$PGDATA" -o "-p $PG_PORT -c listen_addresses=127.0.0.1" -l "$PGDATA/server.log" start >/dev/null 2>&1 || true
+  for _ in $(seq 1 15); do runuser -u postgres -- psql -p "$PG_PORT" -d postgres -c 'select 1' >/dev/null 2>&1 && break; sleep 1; done
+  runuser -u postgres -- psql -p "$PG_PORT" -d postgres -c "ALTER USER postgres PASSWORD 'postgres';" >/dev/null 2>&1 || true
+fi
+log "Postgres up on :$PG_PORT"
+if ! curl -s -o /dev/null "http://localhost:$MOTO_PORT/" 2>/dev/null; then
+  "$LAB_ROOT/motoenv/bin/moto_server" -p "$MOTO_PORT" -H 127.0.0.1 >>"$RUN/moto.log" 2>&1 &
+  waitport "$MOTO_PORT" 20 || true
+fi
 runuser -u postgres -- psql -p "$PG_PORT" -d postgres -c "CREATE DATABASE providerdb;" 2>/dev/null || true
 "$PY" - <<PY
 import boto3
