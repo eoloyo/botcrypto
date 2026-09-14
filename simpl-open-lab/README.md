@@ -67,12 +67,15 @@ provider** — joining the two discovery layers the other scripts run separately
 3. **Verified:** `example-s3.txt` lands in `consumer-bucket` (the consumer-bucket is cleared
    first, so the result is attributable to this catalogue-driven transfer).
 
-> **Consumption is gated in the real design** (this demo doesn't enforce it). Inter-agent
-> calls go through the Tier-2 gateway (mTLS-only) and identity attributes authorize the
-> action — a `DATA_SEARCHER` identity can *search* but is denied *negotiate/transfer*, a
-> `CONSUMER` can transact. The lab queries `fc-service` directly and uses the basic-connector's
-> non-verifying/mocked identity, so consumption here is open — a shortcut, not the architecture.
-> See [catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md) → "Consumption is gated too".
+> **Consumption is gated in the real design** — and `./09-consumption-abac.sh` now enforces the
+> authorization half. Identity attributes authorize the action: a `DATA_SEARCHER` can *search*
+> the catalogue but is **denied** *negotiate/transfer*, a `CONSUMER` can transact. `09` registers
+> a two-policy offer (open access + contract `consumption eq CONSUMER`) and negotiates twice —
+> **CONSUMER → agreement, DATA_SEARCHER → negotiation TERMINATED** — decided by the connector's
+> own shipped `ConsumptionConstraintFunction`. `08` above leaves that gate off (direct
+> `fc-service` query + the basic-connector's mocked/non-verifying identity), so its transfer is
+> open on purpose. See [catalogue/PROVIDER-PUBLICATION.md](catalogue/PROVIDER-PUBLICATION.md) →
+> "Consumption is gated too" for what `09` proves vs. the remaining authenticity gap.
 
 `08` is idempotent and brings up its own prerequisites: if the catalogue is empty it runs
 `07` (or you can seed it faster with `06`), and it builds `connector-be` + runs `02` for the
@@ -92,6 +95,7 @@ cd simpl-open-lab/scripts
 ./06-federated-catalogue.sh   # Gaia-X catalogue: publish a Tier-A SD locally (direct ingest)
 ./07-tier2-provider-publish.sh # the full provider-agent Tier-2 mTLS publish (above)
 ./08-discover-and-transfer.sh  # consumer discovers the SD in the catalogue -> transfers from the provider
+./09-consumption-abac.sh       # consumption ABAC: CONSUMER may transact, DATA_SEARCHER is denied
 ```
 
 Outcomes proven on a stock Linux box (Java 21, Maven 3.9, Go 1.24):

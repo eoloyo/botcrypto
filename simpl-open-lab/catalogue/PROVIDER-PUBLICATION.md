@@ -94,15 +94,35 @@ consumption is **not open** in the real design:
   - `CONSUMER` — act as a data-consumer participant user.
   So a machine identity can be allowed to **discover** yet denied **negotiate/transfer**.
 
-**What this lab actually enforces (the simplification, be honest):** the E2E in `08` does
-**not** enforce that gate. It (1) queries `fc-service` **directly**, bypassing the gateway
-perimeter, and (2) uses the reference `basic-connector`, whose `SimplIdentityService`
-`verifyJwtToken` is a **non-verifying stub** (it deserializes the token and trusts it — no
-signature, no OCSP, no mTLS), with identity attributes **mocked** via a base64 config setting.
-So in the lab, anyone who can reach the ports can consume — a reference-implementation/dev
-shortcut, **not** the architecture. Making the lab enforce it means routing the consumer's
-catalogue query through the Tier-2 gateway and replacing the connector's mocked identity with
-auth-provider-issued attributes plus an EDC policy that denies negotiation to `DATA_SEARCHER`.
+**What this lab enforces — the authorization gate (`scripts/09-consumption-abac.sh`).** The
+ABAC decision that a `DATA_SEARCHER` cannot transact is now demonstrated end to end against the
+connector's **own shipped policy engine** — no connector code change. The provider registers a
+two-policy offer (access policy **open**, so a searcher still *sees* it; contract policy
+`consumption eq CONSUMER`), and the consumer negotiates twice under different identities:
+
+| identity | catalogue offer visible? | contract negotiation | result |
+|---|---|---|---|
+| `CONSUMER` | yes | `FINALIZED` (agreement) | **ALLOWED** |
+| `DATA_SEARCHER` | yes (can browse) | `TERMINATED` (no agreement) | **DENIED** |
+
+The enforcement is the connector's `policy/function/ConsumptionConstraintFunction`, bound to
+`NEGOTIATION_SCOPE` by `policy/service/PolicyFunctionsExtension`; it reads the caller's
+`identity_attributes` claim and allows the negotiation only if the required attribute code is
+present. Run `09` ends with `CONSUMPTION ABAC ENFORCED`. (JSON-LD detail: the contract policy's
+constraint uses the **full IRI** `https://w3id.org/edc/v0.0.1/ns/consumption` as `leftOperand` on
+both sides so EDC's offer-equivalence check passes and the function actually fires.)
+
+**The honest limit — authorization, not authenticity.** `09` proves the *authorization* decision
+(ABAC on attributes) with the real shipped policy function, but the attributes it decides on are
+still **self-asserted**: it flips the consumer identity via `mocked.agent.identity.attributes`,
+and the reference `basic-connector`'s `SimplIdentityService.verifyJwtToken` is a **non-verifying
+stub** (deserializes + trusts the token — no signature, no OCSP, no mTLS). Sourcing those
+attributes *authentically* — the agent fetching its **own** governed attributes over the Tier-2
+mesh — is the upgrade on top, captured in `iaa/patches/connector-tier2-identity.patch`
+(`SimplIdentityService` fetches from the authentication-provider's
+`/participant/identityAttributes`, filtered by `assignedToParticipant`). Likewise `08`'s
+*discovery* still queries `fc-service` **directly**, bypassing the gateway perimeter; gating that
+read through the Tier-2 gateway (mTLS + ABAC) is the remaining discovery-side hardening.
 
 ## Status in this lab
 
