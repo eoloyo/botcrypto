@@ -1,0 +1,16 @@
+# Tiny ePO/procurement-flavoured sample graph for the lab test.
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix epo:     <http://data.europa.eu/a4g/ontology#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex:      <https://example.eu/notice/> .
+
+ex:N1 a epo:Notice ; dcterms:title "Road resurfacing works" ;
+      epo:hasCountry "IT" ; epo:estimatedValue "1200000"^^xsd:decimal .
+ex:N2 a epo:Notice ; dcterms:title "Municipal IT support services" ;
+      epo:hasCountry "ES" ; epo:estimatedValue "450000"^^xsd:decimal .
+ex:N3 a epo:Notice ; dcterms:title "Translation services EN-FR" ;
+      epo:hasCountry "FR" ; epo:estimatedValue "90000"^^xsd:decimal .
+ex:N4 a epo:Notice ; dcterms:title "School catering framework" ;
+      epo:hasCountry "IT" ; epo:estimatedValue "3200000"^^xsd:decimal .
+ex:N5 a epo:Notice ; dcterms:title "Bridge inspection services" ;
+      epo:hasCountry "DE" ; epo:estimatedValue "780000"^^xsd:decimal .

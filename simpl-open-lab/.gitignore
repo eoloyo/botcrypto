@@ -9,5 +9,9 @@ neo4j-dl/
 run/
 src/
 
+# ...but DO track the hand-written SPARQL EDC plugin module (real source, not cloned Simpl sources).
+!sparql-edc/**/src/
+!sparql-edc/**/src/**
+
 # Redis dump written by redis-server at runtime
 *.rdb
