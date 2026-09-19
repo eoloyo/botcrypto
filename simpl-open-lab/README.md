@@ -99,6 +99,7 @@ cd simpl-open-lab/scripts
 ./08-discover-and-transfer.sh  # consumer discovers the SD in the catalogue -> transfers from the provider
 ./09-consumption-abac.sh       # consumption ABAC: CONSUMER may transact, DATA_SEARCHER is denied
 ./10-gated-discovery.sh        # catalogue READ gated by the Tier-2 gateway (mTLS + ephemeral proof + ABAC on a SAP-issued attribute)
+./11-sparql-governed.sh        # a SPARQL knowledge graph as a governed EDC data product: consumer discovers it, negotiates a contract, and gets real EU (ePO) procurement data through the connector — no new connector code, just an HttpData asset
 ```
 
 Outcomes proven on a stock Linux box (Java 21, Maven 3.9, Go 1.24):
