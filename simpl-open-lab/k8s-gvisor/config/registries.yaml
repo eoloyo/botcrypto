@@ -1,0 +1,15 @@
+# k3s registries config: the in-cluster containerd doesn't trust the agent-proxy's
+# TLS CA, so image pulls fail with x509 "unknown authority". Skipping verify for
+# Docker Hub is fine for a throwaway lab. (Alternatively, mount the proxy CA into
+# the container and point containerd at it.)
+mirrors:
+  docker.io:
+    endpoint:
+      - "https://registry-1.docker.io"
+configs:
+  "registry-1.docker.io":
+    tls:
+      insecure_skip_verify: true
+  "docker.io":
+    tls:
+      insecure_skip_verify: true

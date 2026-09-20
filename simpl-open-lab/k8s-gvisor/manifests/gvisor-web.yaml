@@ -1,0 +1,23 @@
+# A RuntimeClass bound to the containerd "runsc" runtime, and a demo pod that
+# uses it. Plain-runc pods still hit the cgroup-v1 nested-runc wall on this host,
+# so ONLY pods with runtimeClassName: runsc will schedule (that is why the k3s
+# system pods like coredns stay Pending here — expected).
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: runsc
+handler: runsc
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gvisor-web
+  labels:
+    app: gvisor-web
+spec:
+  runtimeClassName: runsc
+  containers:
+    - name: web
+      image: nginx:alpine
+      ports:
+        - containerPort: 80

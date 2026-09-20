@@ -1,0 +1,8 @@
+# runsc flags for the gVisor containerd runtime.
+# platform=systrap: works without /dev/kvm (KVM is unavailable in this sandbox).
+# Do NOT set `ignore-cgroups = true` here: it makes runsc leave the sandbox
+# outside a maintained cgroup, and the shim's OOM poller then fails with
+# "loading cgroup for <pid>: cgroups: cgroup deleted". Letting runsc manage the
+# cgroup (default) fixes that.
+[runsc_config]
+  platform = "systrap"

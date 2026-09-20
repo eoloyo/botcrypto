@@ -1,0 +1,15 @@
+# k3s containerd config template. `{{ template "base" . }}` pulls in k3s's own
+# generated config; we append a `runsc` runtime pointing at /etc/containerd/runsc.toml.
+# NOTE: only NEW tables are added here (runtimes.runsc + its options). Do NOT
+# re-declare [plugins."io.containerd.grpc.v1.cri".containerd] — that duplicates a
+# table k3s already emits and containerd will fail to parse ("duplicated tables").
+# The leading top-level `oom_score = 0` must stay ABOVE the base include (top-level
+# TOML keys must precede any table header).
+oom_score = 0
+{{ template "base" . }}
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc.options]
+  TypeUrl = "io.containerd.runsc.v1.options"
+  ConfigPath = "/etc/containerd/runsc.toml"
