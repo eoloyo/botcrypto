@@ -51,9 +51,10 @@ independently of the connector.
 - **Not here (Tier-2 / DCP-in-the-connector):** binding this into the EDC connector's
   DSP handshake — i.e. connectors presenting/verifying VCs during contract
   negotiation instead of the ephemeral proof — needs the connector on an EDC version
-  that ships the **DCP IdentityHub / CredentialService** (Simpl's `connector-be` is on
-  EDC 0.10.1; a bump toward EDC 0.16/0.11+ is required, and there is an
-  `update-edc-to-0-16-0` branch upstream). That is the next increment.
+  that ships the **DCP IdentityHub / CredentialService**. Simpl's `connector-be` was on
+  EDC 0.10.1; **increment D bumps it to native EDC 0.11.1** and proves a real
+  provider→consumer transfer on it (see below). Adding the DCP identity modules on top
+  of that 0.11 base is the remaining wiring.
 - **GA-as-issuer wiring:** here the issuer is a standalone walt.id identity. In Simpl
   the Governance Authority's `issuer-service-be` would issue these credentials and the
   SAP identity attributes would become VC claims.
@@ -111,8 +112,34 @@ turned **off** so a self-crafted access token is accepted on signature alone; in
 holder's STS issues that token and its jti is tracked.)
 
 **Proven end to end:** DCP mechanics on Simpl's chosen walt.id stack (increment A) **and** the
-full DCP Presentation Flow on the native EDC 0.11 IdentityHub (increments B/C). What remains for
-Simpl itself is wiring this into `connector-be`'s DSP handshake (the EDC 0.16 connector bump).
+full DCP Presentation Flow on the native EDC 0.11 IdentityHub (increments B/C).
+
+## Increment D — bump Simpl `connector-be` to native EDC 0.11.1 (`edc011-connector.sh`)
+
+Wiring DCP into the connector needs `connector-be` off EDC 0.10.1 and onto the 0.11 line first.
+`./edc011-connector.sh` clones connector-be, applies `../patches/connector-edc-0.11.patch`, builds,
+and runs the canonical provider→consumer transfer on the freshly built 0.11.1 jar. The **entire
+bump is three lines of `pom.xml`, no Java changes** — all 53 custom classes compile clean on 0.11.1:
+
+```
+1. <edc>0.10.1</edc> -> <edc>0.11.1</edc>
+2. remove legacy data-plane-control-api (0.8.1)   3. force runtime-metamodel to ${edc}
+```
+
+Verified on native EDC 0.11.1:
+
+```
+provider + consumer boot "Runtime … ready"  (gxfs MinioS3 + ionos infra + aws + custom all link)
+transfer: INITIAL -> REQUESTED -> STARTED -> COMPLETED   >>> TRANSFER VERIFIED (example-s3.txt)
+```
+
+The full 0.10 → 0.11 diff and its Simpl impact — including the one non-obvious trap (the gxfs/ionos
+extensions drag in `runtime-metamodel:0.10.1`, which lacks 0.11's `@Configuration`, so the metamodel
+must be force-aligned) — is written up in **[`EDC-0.10-vs-0.11.md`](./EDC-0.10-vs-0.11.md)**.
+
+What remains for Simpl is adding the EDC identity modules (`identity-did-*`, `identity-trust-*`) on
+this 0.11 base and pointing the connector at a CredentialService/IdentityHub, so the DSP handshake
+presents/verifies VCs — the two halves (B/C IdentityHub + D connector) then meet.
 
 Run: `./edc011-identityhub.sh` · tear down: `pkill -f identity-hub.jar`.
 
@@ -142,3 +169,6 @@ Tear down: `docker rm -f waltid-issuer waltid-verifier`.
 | `edc011-identityhub.sh` | build + boot the native **EDC 0.11 IdentityHub**, seed a Simpl credential, read it back via the DCP API |
 | `seed-extension/` | tiny EDC `ServiceExtension` that seeds `simpl-provider` (+ injectable key) + a `SimplDataspaceMembershipCredential` at boot |
 | `edc011-present.py` | end-to-end **verified DCP presentation** on native EDC 0.11 (did:web hosting + SI token + `/presentations/query` → VP) |
+| `edc011-connector.sh` | bump Simpl **connector-be to native EDC 0.11.1**, build, and run a verified provider→consumer transfer on it |
+| `connector-edc-0.11.patch` | *(in `../patches/`)* the pom-only 0.10.1→0.11.1 bump (edc property, drop legacy control-api, force runtime-metamodel) |
+| `EDC-0.10-vs-0.11.md` | the meaningful 0.10 → 0.11 differences and their impact on Simpl `connector-be` |

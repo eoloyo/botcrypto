@@ -1,0 +1,44 @@
+diff --git a/pom.xml b/pom.xml
+index b9dfbbe..69bc5cf 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -13,7 +13,7 @@
+         <maven.compiler.target>17</maven.compiler.target>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+ 
+-        <edc>0.10.1</edc>
++        <edc>0.11.1</edc>
+         <ionosEdcSimplInfraVersion>1.0.1</ionosEdcSimplInfraVersion>
+         <eclipseGroupId>org.eclipse.edc</eclipseGroupId>
+         <edcForkedRepositoryProjectId>958</edcForkedRepositoryProjectId>
+@@ -176,11 +176,8 @@
+             <artifactId>data-plane-signaling-api</artifactId>
+             <version>${edc}</version>
+         </dependency>
+-        <dependency>
+-            <groupId>${eclipseGroupId}</groupId>
+-            <artifactId>data-plane-control-api</artifactId>
+-            <version>0.8.1</version>
+-        </dependency>
++        <!-- data-plane-control-api removed in the EDC 0.11 line (legacy data-plane control
++             API, superseded by the data-plane signaling API already declared above). -->
+         <dependency>
+             <groupId>${eclipseGroupId}</groupId>
+             <artifactId>data-plane-public-api-v2</artifactId>
+@@ -372,6 +369,16 @@
+     Once EDC version is updated to at least 0.13.0 this dependency can be removed   -->
+     <dependencyManagement>
+         <dependencies>
++            <!-- EDC 0.11 introduces the config-injection annotations (@Configuration/@Settings) in
++                 runtime-metamodel. The gxfs/ionos extensions drag in runtime-metamodel 0.10.1
++                 transitively (declared first, so it wins Maven mediation), which lacks
++                 @Configuration and makes 0.11 core fail at boot with NoClassDefFoundError. Force the
++                 metamodel to the 0.11 line so the whole extension set links against one version. -->
++            <dependency>
++                <groupId>org.eclipse.edc</groupId>
++                <artifactId>runtime-metamodel</artifactId>
++                <version>${edc}</version>
++            </dependency>
+             <dependency>
+                 <groupId>com.google.protobuf</groupId>
+                 <artifactId>protobuf-java</artifactId>
