@@ -90,11 +90,29 @@ credential  : ['VerifiableCredential', 'SimplDataspaceMembershipCredential']
 state       : 500 (ISSUED)
 ```
 
-**Proven:** the native EDC 0.11 DCP CredentialService builds, runs, **holds a real Simpl
-credential**, and serves it over the authenticated Identity API — with the DCP Presentation API
-live and guarded. **Remaining (next increment):** a *fully-verified* `/presentations/query` with
-a self-issued token over did:web (needs a resolvable verifier DID) — the credential+presentation
-*mechanics* are already green in increment A on Simpl's chosen stack.
+**Fully-verified presentation** (`edc011-present.py`): the orchestrator generates a provider +
+verifier EC key, hosts both DID documents as **did:web over http** (:7100), boots the IdentityHub
+seeded with the provider key + resolvable DID, builds the DCP **self-issued token** exactly as
+EDC's `JwtCreationUtil.generateSiToken` (an SI token signed by the verifier key wrapping a scoped
+access token signed by the provider key), and POSTs the `PresentationQueryMessage`. Result:
+
+```
+presentation query -> 200
+VP signed by      : did:web:localhost%3A7100:simpl-provider
+credentials in VP : ['VerifiableCredential', 'SimplDataspaceMembershipCredential']
+contains SimplDataspaceMembershipCredential: True
+```
+
+So on **native EDC 0.11** the IdentityHub validated the self-issued token (verifier DID + scoped
+access token, DIDs resolved via did:web), resolved the credential by scope, and returned a signed
+**Verifiable Presentation of the Simpl membership credential** — the real DCP Tier-2
+machine-identity presentation flow, not a mock. (One dev switch: `accesstoken.jti.validation` is
+turned **off** so a self-crafted access token is accepted on signature alone; in production the
+holder's STS issues that token and its jti is tracked.)
+
+**Proven end to end:** DCP mechanics on Simpl's chosen walt.id stack (increment A) **and** the
+full DCP Presentation Flow on the native EDC 0.11 IdentityHub (increments B/C). What remains for
+Simpl itself is wiring this into `connector-be`'s DSP handshake (the EDC 0.16 connector bump).
 
 Run: `./edc011-identityhub.sh` · tear down: `pkill -f identity-hub.jar`.
 
@@ -122,4 +140,5 @@ Tear down: `docker rm -f waltid-issuer waltid-verifier`.
 | `run.sh` | pull + start walt.id issuer/verifier, then run the demo |
 | `dcp-demo.py` | onboard issuer+holder → issue Simpl VC → OID4VP present → verify |
 | `edc011-identityhub.sh` | build + boot the native **EDC 0.11 IdentityHub**, seed a Simpl credential, read it back via the DCP API |
-| `seed-extension/` | tiny EDC `ServiceExtension` that seeds `simpl-provider` + a `SimplDataspaceMembershipCredential` at boot |
+| `seed-extension/` | tiny EDC `ServiceExtension` that seeds `simpl-provider` (+ injectable key) + a `SimplDataspaceMembershipCredential` at boot |
+| `edc011-present.py` | end-to-end **verified DCP presentation** on native EDC 0.11 (did:web hosting + SI token + `/presentations/query` → VP) |

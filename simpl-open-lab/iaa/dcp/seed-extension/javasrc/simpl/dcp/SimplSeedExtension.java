@@ -52,7 +52,22 @@ public class SimplSeedExtension implements ServiceExtension {
         var providerId = "simpl-provider";
         var providerDid = env("SIMPL_PROVIDER_DID", "did:web:localhost%3A8182:simpl-provider");
 
-        // 1) provider participant (super-user role so the whole thing is self-contained)
+        // 1) provider participant (super-user role so the whole thing is self-contained).
+        //    If a key is injected (SIMPL_PROVIDER_PRIVATE_JWK/PUBLIC_JWK) use it - so the caller
+        //    can sign the inner access-token of the DCP self-issued token; else generate one.
+        var providerAlias = "simpl-provider-alias";
+        var provKey = KeyDescriptor.Builder.newInstance()
+                .keyId(providerDid + "#key-1")
+                .privateKeyAlias(providerAlias)
+                .resourceId("simpl-provider-resource");
+        var provPriv = System.getenv("SIMPL_PROVIDER_PRIVATE_JWK");
+        var provPub = System.getenv("SIMPL_PROVIDER_PUBLIC_JWK");
+        if (provPriv != null && provPub != null) {
+            vault.storeSecret(providerAlias, provPriv);
+            provKey.publicKeyJwk(parseJwk(provPub));
+        } else {
+            provKey.keyGeneratorParams(Map.of("algorithm", "EC", "curve", "secp256r1"));
+        }
         var manifest = ParticipantManifest.Builder.newInstance()
                 .participantId(providerId)
                 .active(true)
@@ -60,12 +75,7 @@ public class SimplSeedExtension implements ServiceExtension {
                 .serviceEndpoint(new Service("credential-service", "CredentialService",
                         "http://localhost:8182/api/resolution/v1/participants/simpl-provider/presentations"))
                 .roles(List.of(ServicePrincipal.ROLE_ADMIN))
-                .key(KeyDescriptor.Builder.newInstance()
-                        .keyId(providerDid + "#key-1")
-                        .privateKeyAlias("simpl-provider-alias")
-                        .resourceId("simpl-provider-resource")
-                        .keyGeneratorParams(Map.of("algorithm", "EC", "curve", "secp256r1"))
-                        .build())
+                .key(provKey.build())
                 .build();
         var pr = participants.createParticipantContext(manifest);
         if (pr.failed()) {
