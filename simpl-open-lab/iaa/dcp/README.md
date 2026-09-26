@@ -137,9 +137,52 @@ The full 0.10 → 0.11 diff and its Simpl impact — including the one non-obvio
 extensions drag in `runtime-metamodel:0.10.1`, which lacks 0.11's `@Configuration`, so the metamodel
 must be force-aligned) — is written up in **[`EDC-0.10-vs-0.11.md`](./EDC-0.10-vs-0.11.md)**.
 
-What remains for Simpl is adding the EDC identity modules (`identity-did-*`, `identity-trust-*`) on
-this 0.11 base and pointing the connector at a CredentialService/IdentityHub, so the DSP handshake
-presents/verifies VCs — the two halves (B/C IdentityHub + D connector) then meet.
+## Increment E — swap the connector's identity to native DCP (`edc011-connector-dcp.sh`)
+
+On the 0.11.1 base, this replaces Simpl's custom Tier-2 `SimplIdentityService` (X.509/mTLS +
+ephemeral proof) with **EDC's native DCP `IdentityService`** — so the connector uses the
+Decentralized Claims Protocol for machine identity. Again the change is tiny
+(`../patches/connector-dcp-0.11.patch`):
+
+```
+pom.xml : + identity-trust-core, token-core, identity-did-core, identity-did-web,
+            identity-trust-issuers-configuration  (sts-embedded, transforms, VC verification
+            come transitively via identity-trust-core)
+SPI     : - eu.europa.ec.simpl.iam.service.IamExtension   (so EDC's DCP IdentityService wins;
+            two IdentityService providers would conflict)
+```
+
+**Stages 1 + 2 — VERIFIED.** The connector builds with the DCP stack bundled and boots on it:
+
+```
+Using the Embedded STS client, as no other implementation was provided.
+Runtime … ready
+SimplIdentityService NOT registered : ✔   (grep count 0)
+management + DSP APIs live
+```
+
+So `connector-be` now runs EDC's **DCP `IdentityService` + embedded STS + did:web resolution**,
+not the custom X.509 IAM. Config keys discovered/used: `edc.iam.issuer.id`,
+`edc.iam.sts.privatekey.alias`, `edc.iam.sts.publickey.id`, `edc.iam.did.web.use.https`,
+`edc.iam.trusted-issuer.*` (the DCP default services extension supplies the AudienceResolver +
+scope extractor, so no shim was needed).
+
+**Stage 3 — the remaining MVD-grade wiring (not yet green).** A full two-connector, VC-*gated*
+transfer needs, per connector: an STS signing key seeded in the connector vault under
+`edc.iam.sts.privatekey.alias` (InMemoryVault has no env seed and `vault-filesystem` is not
+published at 0.11.1 → a tiny boot seed extension, like `seed-extension/`, is the clean path); a
+resolvable **did:web** doc whose verificationMethod is that key and that lists a **CredentialService**
+endpoint → that connector's IdentityHub (reuse `edc011-identityhub.sh`, seeded with the connector's
+`SimplDataspaceMembershipCredential`); `edc.iam.trusted-issuer.ga.id=did:web:governance-authority`;
+and a policy whose scope maps to `SimplDataspaceMembershipCredential` so the VP is actually required.
+Then the `02` negotiation drives a real VP presentation/verification between the two connectors.
+
+This is the same presentation flow already proven standalone on the native IdentityHub in B/C — the
+piece that connects them is this Stage-3 wiring.
+
+Run: `./edc011-connector-dcp.sh` · tear down: `fuser -k 29193/tcp`.
+
+---
 
 Run: `./edc011-identityhub.sh` · tear down: `pkill -f identity-hub.jar`.
 
@@ -172,3 +215,5 @@ Tear down: `docker rm -f waltid-issuer waltid-verifier`.
 | `edc011-connector.sh` | bump Simpl **connector-be to native EDC 0.11.1**, build, and run a verified provider→consumer transfer on it |
 | `connector-edc-0.11.patch` | *(in `../patches/`)* the pom-only 0.10.1→0.11.1 bump (edc property, drop legacy control-api, force runtime-metamodel) |
 | `EDC-0.10-vs-0.11.md` | the meaningful 0.10 → 0.11 differences and their impact on Simpl `connector-be` |
+| `edc011-connector-dcp.sh` | swap connector-be's identity to EDC's native **DCP `IdentityService`**; build + boot-verify (increment E, stages 1–2) |
+| `connector-dcp-0.11.patch` | *(in `../patches/`)* add the DCP module set + drop Simpl's `IamExtension` from the SPI |

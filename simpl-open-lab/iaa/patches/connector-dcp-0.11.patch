@@ -1,0 +1,57 @@
+diff --git a/pom.xml b/pom.xml
+index 69bc5cf..8b2d944 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -316,6 +316,42 @@
+             <version>${edc}</version>
+         </dependency>
+ 
++        <!-- DCP (Decentralized Claims Protocol) identity stack. identity-trust-core provides the
++             DCP IdentityService + embedded STS + presentation verification (pulls
++             identity-trust-transform, identity-trust-sts-embedded, verifiable-credentials,
++             token-lib transitively). DID resolution and the trusted-issuer registry are added
++             explicitly. With these on the classpath and the Simpl IamExtension removed from the
++             ServiceExtension SPI file, EDC's DCP IdentityService replaces SimplIdentityService and
++             the connector presents/verifies Verifiable Credentials during the DSP handshake. -->
++        <dependency>
++            <groupId>${eclipseGroupId}</groupId>
++            <artifactId>identity-trust-core</artifactId>
++            <version>${edc}</version>
++        </dependency>
++        <!-- token-core registers TokenValidationService, TokenValidationRulesRegistry, the
++             JwsSignerProvider (external signer, vault-backed) and the default JtiValidationStore
++             that the DCP IdentityAndTrustExtension injects. -->
++        <dependency>
++            <groupId>${eclipseGroupId}</groupId>
++            <artifactId>token-core</artifactId>
++            <version>${edc}</version>
++        </dependency>
++        <dependency>
++            <groupId>${eclipseGroupId}</groupId>
++            <artifactId>identity-did-core</artifactId>
++            <version>${edc}</version>
++        </dependency>
++        <dependency>
++            <groupId>${eclipseGroupId}</groupId>
++            <artifactId>identity-did-web</artifactId>
++            <version>${edc}</version>
++        </dependency>
++        <dependency>
++            <groupId>${eclipseGroupId}</groupId>
++            <artifactId>identity-trust-issuers-configuration</artifactId>
++            <version>${edc}</version>
++        </dependency>
++
+         <!--        test dependencies-->
+ 
+         <dependency>
+diff --git a/src/main/resources/META-INF/services/org.eclipse.edc.spi.system.ServiceExtension b/src/main/resources/META-INF/services/org.eclipse.edc.spi.system.ServiceExtension
+index 61dbe54..53d7019 100644
+--- a/src/main/resources/META-INF/services/org.eclipse.edc.spi.system.ServiceExtension
++++ b/src/main/resources/META-INF/services/org.eclipse.edc.spi.system.ServiceExtension
+@@ -1,5 +1,4 @@
+ eu.europa.ec.simpl.policy.service.PolicyFunctionsExtension
+-eu.europa.ec.simpl.iam.service.IamExtension
+ eu.europa.ec.simpl.contractsign.service.ContractSignCallbackEndpointExtension
+ eu.europa.ec.simpl.contractsign.service.SignContractNegotiationPendingGuardExtension
+ fr.gxfs.edc.extension.s3.MinioCoreExtension
