@@ -58,6 +58,35 @@ independently of the connector.
   the Governance Authority's `issuer-service-be` would issue these credentials and the
   SAP identity attributes would become VC claims.
 
+## Increment B — native EDC 0.11 IdentityHub (`edc011-identityhub.sh`)
+
+Where increment A proves the DCP *mechanics* on walt.id, increment B builds and runs the
+**real Eclipse EDC IdentityHub v0.11.1 from source** — the actual **DCP CredentialService +
+embedded SecureTokenService (STS)** — on the EDC 0.11 line (the line LDS / sovity EDC-CE
+sit on, and the target for Simpl's Tier-2).
+
+`./edc011-identityhub.sh` clones IdentityHub v0.11.1, builds the launcher shadow jar, boots
+it, and verifies:
+
+- **health** → `isSystemHealthy: true` (42 service extensions, embedded STS);
+- **the DCP Presentation API is live and auth-guarded** —
+  `POST /api/resolution/v1/participants/{id}/presentations/query` → **HTTP 401** without a
+  valid self-issued (SI) token.
+
+Walls the script clears (found the hard way): EDC needs a **JDK 17** toolchain; Maven Central
+**rate-limits (429)** the shared egress IP (routed via the Google Maven mirror); EDC's
+env-config loader **rejects duplicate `HTTPS_PROXY`/`https_proxy`** keys (proxy env unset for
+the JVM).
+
+**Proven:** the native EDC 0.11 DCP CredentialService builds, runs, and exposes a live,
+auth-guarded Presentation API. **Next (documented, not yet done):** seed a participant context
++ credential and complete a *fully-verified* presentation with a valid SI token over did:web —
+this IdentityHub version seeds the super-user **in-process** (no boot setting), so that step is
+the remaining increment. The credential+presentation flow itself is already green in
+increment A.
+
+Run: `./edc011-identityhub.sh` · tear down: `pkill -f identity-hub.jar`.
+
 ## Prerequisites
 
 - A working **Docker daemon** (the script starts `dockerd` if needed).
@@ -81,3 +110,4 @@ Tear down: `docker rm -f waltid-issuer waltid-verifier`.
 |---|---|
 | `run.sh` | pull + start walt.id issuer/verifier, then run the demo |
 | `dcp-demo.py` | onboard issuer+holder → issue Simpl VC → OID4VP present → verify |
+| `edc011-identityhub.sh` | build + boot the native **EDC 0.11 IdentityHub** (DCP CredentialService); verify Presentation API live + guarded |
