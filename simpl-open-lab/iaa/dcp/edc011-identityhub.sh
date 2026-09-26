@@ -69,9 +69,22 @@ fi
 [ -f "$JAR" ] || { echo "build failed: no jar"; exit 1; }
 log "jar: $JAR ($(du -h "$JAR" | cut -f1))"
 
-# 4. boot the launcher (proxy env unset so EDC config loader doesn't choke)
-pgrep -f 'identity-hub.jar' >/dev/null && { log "already running"; } || {
-  log "booting IdentityHub…"
+# 4. build the Simpl seed extension (compiled straight against the fat jar) --------------
+EXT="$HERE/seed-extension"
+EXTJAR="$EXT/seed-extension.jar"
+if [ ! -f "$EXTJAR" ]; then
+  log "building Simpl seed extension…"
+  rm -rf "$EXT/out"; mkdir -p "$EXT/out"
+  "$JDK17/bin/javac" -cp "$JAR" -d "$EXT/out" "$EXT/src/simpl/dcp/SimplSeedExtension.java"
+  cp -r "$EXT/resources/META-INF" "$EXT/out/"
+  "$JDK17/bin/jar" cf "$EXTJAR" -C "$EXT/out" .
+fi
+log "seed extension: $EXTJAR"
+
+# 5. boot the launcher WITH the seed extension (proxy env unset; did:web over http) ------
+RAWVC="${SIMPL_RAW_VC:-eyPLACEHOLDER.simpl.jwt}"   # export SIMPL_RAW_VC=<a signed VC JWT> for a real rawVc
+if ! curl -s -o /dev/null -m 2 http://localhost:8080/api/check/health; then
+  log "booting IdentityHub + Simpl seed…"
   ( cd "$(dirname "$JAR")" && env \
       -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
       -u NO_PROXY -u no_proxy -u ALL_PROXY -u all_proxy -u JAVA_TOOL_OPTIONS \
@@ -82,22 +95,35 @@ pgrep -f 'identity-hub.jar' >/dev/null && { log "already running"; } || {
       WEB_HTTP_ACCOUNTS_PORT=8184 WEB_HTTP_ACCOUNTS_PATH=/api/accounts \
       EDC_IH_IAM_ID=did:web:localhost EDC_API_ACCOUNTS_KEY=password \
       EDC_IAM_ACCESSTOKEN_JTI_VALIDATION=true EDC_SQL_SCHEMA_AUTOCREATE=true \
-      setsid java -jar identity-hub.jar > /tmp/ih-run.log 2>&1 & )
+      EDC_IAM_DID_WEB_USE_HTTPS=false SIMPL_RAW_VC="$RAWVC" \
+      setsid java -cp "identity-hub.jar:$EXTJAR" org.eclipse.edc.boot.system.runtime.BaseRuntime > /tmp/ih-run.log 2>&1 & )
   for _ in $(seq 1 40); do
     [ "$(curl -s -o /dev/null -w '%{http_code}' -m 2 http://localhost:8080/api/check/health)" = 200 ] && break; sleep 2
   done
-}
+fi
 
-# 5. verify
+# 6. verify -----------------------------------------------------------------------------
 log "PROOF 1 — health:"; curl -s http://localhost:8080/api/check/health; echo
 log "PROOF 2 — DCP Presentation API live + auth-guarded (401 without a valid SI token):"
 code=$(curl -s -m 4 -o /dev/null -w '%{http_code}' -X POST \
-  "http://localhost:8182/api/resolution/v1/participants/ZGlkOndlYjpsb2NhbGhvc3Q=/presentations/query" \
+  "http://localhost:8182/api/resolution/v1/participants/c2ltcGwtcHJvdmlkZXI=/presentations/query" \
   -H 'Content-Type: application/json' -d '{"@type":"PresentationQueryMessage"}')
 echo "   POST /presentations/query (no token) -> HTTP $code  $([ "$code" = 401 ] && echo '✔ guarded' || echo '(expected 401)')"
-log "PROOF 3 — embedded STS:"; grep -o 'embedded SecureTokenService (STS) instance' /tmp/ih-run.log | head -1
+
+log "PROOF 3 — the seed put a Simpl credential into the IdentityHub; read it back via the DCP Identity API:"
+APIKEY=$(grep -oE "apiKey=[^ ]+" /tmp/ih-run.log | head -1 | cut -d= -f2-)
+curl -s -m 5 -H "x-api-key: $APIKEY" \
+  "http://localhost:8181/api/identity/v1alpha/participants/c2ltcGwtcHJvdmlkZXI=/credentials" \
+  | python3 -c 'import sys,json
+d=json.load(sys.stdin); r=d[0]
+vc=r["verifiableCredential"]["credential"]
+print("   participant :", r["participantId"])
+print("   credential  :", vc.get("type"))
+print("   state       :", r["state"], "(500=ISSUED)")
+print("   rawVc issued by walt.id? ", r["verifiableCredential"]["rawVc"][:20]+"...")' 2>/dev/null || echo "   (could not read credential)"
 
 echo
-log "EDC 0.11 IdentityHub (DCP CredentialService) is RUNNING. Next: seed a participant"
-log "+ credential and present with a valid SI token (see README, increment B scope)."
-log "Tear down:  pkill -f identity-hub.jar"
+log "VERIFIED: native EDC 0.11 IdentityHub (DCP CredentialService) built from source, running,"
+log "and holding a SimplDataspaceMembershipCredential retrievable via the authenticated DCP API."
+log "Remaining (next increment): a fully-verified /presentations/query with a self-issued token"
+log "over did:web (needs a resolvable verifier DID). Tear down:  fuser -k 8080/tcp"

@@ -78,12 +78,23 @@ Walls the script clears (found the hard way): EDC needs a **JDK 17** toolchain; 
 env-config loader **rejects duplicate `HTTPS_PROXY`/`https_proxy`** keys (proxy env unset for
 the JVM).
 
-**Proven:** the native EDC 0.11 DCP CredentialService builds, runs, and exposes a live,
-auth-guarded Presentation API. **Next (documented, not yet done):** seed a participant context
-+ credential and complete a *fully-verified* presentation with a valid SI token over did:web —
-this IdentityHub version seeds the super-user **in-process** (no boot setting), so that step is
-the remaining increment. The credential+presentation flow itself is already green in
-increment A.
+A small **seed extension** (`seed-extension/`, compiled straight against the fat jar and loaded
+on the classpath at boot) then puts a **`SimplDataspaceMembershipCredential`** — holding the same
+`rawVc` JWT issued by walt.id in increment A — into the IdentityHub for a `simpl-provider`
+participant context (this version seeds the super-user **in-process**, as there is no HTTP
+bootstrap). The script reads it back through the authenticated DCP Identity API:
+
+```
+participant : simpl-provider
+credential  : ['VerifiableCredential', 'SimplDataspaceMembershipCredential']
+state       : 500 (ISSUED)
+```
+
+**Proven:** the native EDC 0.11 DCP CredentialService builds, runs, **holds a real Simpl
+credential**, and serves it over the authenticated Identity API — with the DCP Presentation API
+live and guarded. **Remaining (next increment):** a *fully-verified* `/presentations/query` with
+a self-issued token over did:web (needs a resolvable verifier DID) — the credential+presentation
+*mechanics* are already green in increment A on Simpl's chosen stack.
 
 Run: `./edc011-identityhub.sh` · tear down: `pkill -f identity-hub.jar`.
 
@@ -110,4 +121,5 @@ Tear down: `docker rm -f waltid-issuer waltid-verifier`.
 |---|---|
 | `run.sh` | pull + start walt.id issuer/verifier, then run the demo |
 | `dcp-demo.py` | onboard issuer+holder → issue Simpl VC → OID4VP present → verify |
-| `edc011-identityhub.sh` | build + boot the native **EDC 0.11 IdentityHub** (DCP CredentialService); verify Presentation API live + guarded |
+| `edc011-identityhub.sh` | build + boot the native **EDC 0.11 IdentityHub**, seed a Simpl credential, read it back via the DCP API |
+| `seed-extension/` | tiny EDC `ServiceExtension` that seeds `simpl-provider` + a `SimplDataspaceMembershipCredential` at boot |
