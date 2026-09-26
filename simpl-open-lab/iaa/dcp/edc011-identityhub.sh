@@ -75,7 +75,7 @@ EXTJAR="$EXT/seed-extension.jar"
 if [ ! -f "$EXTJAR" ]; then
   log "building Simpl seed extension…"
   rm -rf "$EXT/out"; mkdir -p "$EXT/out"
-  "$JDK17/bin/javac" -cp "$JAR" -d "$EXT/out" "$EXT/src/simpl/dcp/SimplSeedExtension.java"
+  "$JDK17/bin/javac" -cp "$JAR" -d "$EXT/out" "$EXT/javasrc/simpl/dcp/SimplSeedExtension.java"
   cp -r "$EXT/resources/META-INF" "$EXT/out/"
   "$JDK17/bin/jar" cf "$EXTJAR" -C "$EXT/out" .
 fi
