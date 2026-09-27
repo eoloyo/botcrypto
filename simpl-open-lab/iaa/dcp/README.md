@@ -167,20 +167,50 @@ not the custom X.509 IAM. Config keys discovered/used: `edc.iam.issuer.id`,
 `edc.iam.trusted-issuer.*` (the DCP default services extension supplies the AudienceResolver +
 scope extractor, so no shim was needed).
 
-**Stage 3 — the remaining MVD-grade wiring (not yet green).** A full two-connector, VC-*gated*
-transfer needs, per connector: an STS signing key seeded in the connector vault under
-`edc.iam.sts.privatekey.alias` (InMemoryVault has no env seed and `vault-filesystem` is not
-published at 0.11.1 → a tiny boot seed extension, like `seed-extension/`, is the clean path); a
-resolvable **did:web** doc whose verificationMethod is that key and that lists a **CredentialService**
-endpoint → that connector's IdentityHub (reuse `edc011-identityhub.sh`, seeded with the connector's
-`SimplDataspaceMembershipCredential`); `edc.iam.trusted-issuer.ga.id=did:web:governance-authority`;
-and a policy whose scope maps to `SimplDataspaceMembershipCredential` so the VP is actually required.
-Then the `02` negotiation drives a real VP presentation/verification between the two connectors.
-
-This is the same presentation flow already proven standalone on the native IdentityHub in B/C — the
-piece that connects them is this Stage-3 wiring.
-
 Run: `./edc011-connector-dcp.sh` · tear down: `fuser -k 29193/tcp`.
+
+### Stage 3 — credential-gated transfer between two connectors (`edc011-dcp-transfer.py`) — VERIFIED
+
+Two Simpl connectors complete a DSP transfer that is gated by a **DCP-verified
+`SimplDataspaceMembershipCredential`**. The IdentityHub from B/C and the connector from D/E now work together.
+
+What the EDC 0.11.1 jars showed, and how Stage 3 uses it:
+
+- **The STS key needs no vault seeding.** `AbstractPrivateKeyResolver` falls back to configuration, so
+  each connector gets its private JWK as a config value named after `edc.iam.sts.privatekey.alias`.
+- **0.11.1 has no default DCP scope.** Without one, a handshake asks for no credential at all. A small
+  **`SimplDcpExtension`** (now part of `connector-dcp-0.11.patch`) adds the scope
+  `org.eclipse.edc.vc.type:SimplDataspaceMembershipCredential:read` to every DSP request
+  (catalog, negotiation, transfer, version).
+- **Claims bridge.** The same extension replaces the default claim-token function. It keeps the rule
+  "no credential on the presentation → reject", and turns the verified credential into `client_id`
+  (the subject DID) and Simpl's own `identity_attributes`. **Simpl's existing ABAC rule
+  (`edc:consumption`, `ConsumptionConstraintFunction`) runs unchanged, on DCP-verified credential data.**
+- One IdentityHub hosts both participants (`seed-extension/` has a new multi-participant mode,
+  `SIMPL_SEED_JSON`). did:web documents for the Governance Authority, the provider and the consumer are
+  served over http; each connector's document lists a CredentialService endpoint on the IdentityHub.
+  The GA signs JWT credentials whose subject is the connector's DID.
+
+`../../motoenv/bin/python edc011-dcp-transfer.py` runs four scenarios, each on fresh databases and
+freshly booted runtimes:
+
+```
+scenario           reached       outcome      result
+positive           transfer      COMPLETED    PASS   file delivered to consumer-bucket
+abac-deny          negotiation   TERMINATED   PASS   "Policy in scope contract.negotiation not fulfilled … consumption"
+untrusted-issuer   catalog       REJECTED     PASS   401 "Credential types [… SimplDataspaceMembershipCredential]
+                                                      are not supported for issuer did:web:…:ga"
+no-credential      catalog       REJECTED     PASS   401 "No VerifiableCredentials were found on VP"
+```
+
+In the positive run each connector verified the other's credential four times over the exchange
+(`[SIMPL-DCP] verified … issued by did:web:…:ga to did:web:…:consumer -> identity_attributes=[CONSUMER,
+DATA_SEARCHER]`), and the provider logged `Evaluating constraint: consumption EQ CONSUMER`. The
+rejection reasons above come from a run with `EDC_LOG_LEVEL=DEBUG`.
+
+Two dev settings remain: did:web over http, and access-token jti validation off (the embedded STS of
+one process issues tokens the IdentityHub of another process validates). Everything else is native
+EDC 0.11.1 behaviour.
 
 ---
 
@@ -210,10 +240,11 @@ Tear down: `docker rm -f waltid-issuer waltid-verifier`.
 | `run.sh` | pull + start walt.id issuer/verifier, then run the demo |
 | `dcp-demo.py` | onboard issuer+holder → issue Simpl VC → OID4VP present → verify |
 | `edc011-identityhub.sh` | build + boot the native **EDC 0.11 IdentityHub**, seed a Simpl credential, read it back via the DCP API |
-| `seed-extension/` | tiny EDC `ServiceExtension` that seeds `simpl-provider` (+ injectable key) + a `SimplDataspaceMembershipCredential` at boot |
+| `seed-extension/` | tiny EDC `ServiceExtension` that seeds `simpl-provider` (+ injectable key) + a `SimplDataspaceMembershipCredential` at boot; `SIMPL_SEED_JSON` seeds several participants with their own keys and credentials |
 | `edc011-present.py` | end-to-end **verified DCP presentation** on native EDC 0.11 (did:web hosting + SI token + `/presentations/query` → VP) |
 | `edc011-connector.sh` | bump Simpl **connector-be to native EDC 0.11.1**, build, and run a verified provider→consumer transfer on it |
 | `connector-edc-0.11.patch` | *(in `../patches/`)* the pom-only 0.10.1→0.11.1 bump (edc property, drop legacy control-api, force runtime-metamodel) |
 | `EDC-0.10-vs-0.11.md` | the meaningful 0.10 → 0.11 differences and their impact on Simpl `connector-be` |
 | `edc011-connector-dcp.sh` | swap connector-be's identity to EDC's native **DCP `IdentityService`**; build + boot-verify (increment E, stages 1–2) |
-| `connector-dcp-0.11.patch` | *(in `../patches/`)* add the DCP module set + drop Simpl's `IamExtension` from the SPI |
+| `connector-dcp-0.11.patch` | *(in `../patches/`)* add the DCP module set, drop Simpl's `IamExtension`, add `SimplDcpExtension` (membership scope + claims bridge to Simpl ABAC) |
+| `edc011-dcp-transfer.py` | increment E stage 3: credential-gated transfer between two DCP connectors, four scenarios (positive, ABAC deny, untrusted issuer, no credential) |

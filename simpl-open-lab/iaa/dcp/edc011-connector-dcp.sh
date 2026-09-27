@@ -11,10 +11,8 @@
 #   Stage 2 (boot):   boot the connector on the DCP IdentityService + embedded STS and
 #                     verify it comes up "ready" with no SimplIdentityService.
 #
-# Both stages are VERIFIED green here. Stage 3 (a two-connector, VC-gated transfer
-# with each connector backed by its own IdentityHub CredentialService) is the
-# remaining MVD-grade wiring — its exact requirements are documented in the README
-# ("Increment E") and below.
+# Both stages are VERIFIED green here. Stage 3 (a two-connector transfer gated by a
+# DCP-verified membership credential) is in edc011-dcp-transfer.py.
 # ============================================================================
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,17 +61,6 @@ grep -qi  "Embedded STS client"  "$LOG"             && echo "   EDC DCP embedded
 echo
 log "Stage 1 + 2 VERIFIED: Simpl connector-be runs on EDC's native DCP IdentityService (identity-trust"
 log "+ embedded STS + did:web resolution), replacing the custom X.509/mTLS SimplIdentityService."
-cat <<'NOTE'
-
-Stage 3 (remaining — full two-connector VC-gated transfer) needs, per connector:
-  - an STS signing key seeded in the connector vault under `edc.iam.sts.privatekey.alias`
-    (the InMemoryVault has no env seed; vault-filesystem is not published at 0.11.1, so a tiny
-    boot seed extension — like iaa/dcp/seed-extension — is the clean path);
-  - a resolvable did:web document whose verificationMethod is that key, listing a CredentialService
-    endpoint -> that connector's IdentityHub (reuse iaa/dcp/edc011-identityhub.sh, seeded with the
-    connector's SimplDataspaceMembershipCredential);
-  - trusted-issuer config `edc.iam.trusted-issuer.ga.id=did:web:governance-authority`;
-  - a policy whose scope maps to SimplDataspaceMembershipCredential, so the VP is actually required.
-Then the 02 transfer negotiation triggers a real VP presentation/verification between the connectors.
-NOTE
+log "Next: Stage 3, a credential-gated transfer between two connectors:"
+log "  ../../motoenv/bin/python edc011-dcp-transfer.py"
 log "Tear down: fuser -k 29193/tcp"

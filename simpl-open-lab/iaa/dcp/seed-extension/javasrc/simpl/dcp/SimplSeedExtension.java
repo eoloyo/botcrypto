@@ -49,6 +49,11 @@ public class SimplSeedExtension implements ServiceExtension {
 
     @Override
     public void start() {
+        var seedJson = System.getenv("SIMPL_SEED_JSON");
+        if (seedJson != null && !seedJson.isBlank()) {
+            seedMany(seedJson);
+            return;
+        }
         var providerId = "simpl-provider";
         var providerDid = env("SIMPL_PROVIDER_DID", "did:web:localhost%3A8182:simpl-provider");
 
@@ -138,6 +143,74 @@ public class SimplSeedExtension implements ServiceExtension {
             monitor.info("[SIMPL-SEED] verifier participant: " + (vr.succeeded() ? "created " + verifierDid : vr.getFailureDetail()));
         }
         monitor.info("[SIMPL-SEED] done.");
+    }
+
+    /**
+     * Multi-participant mode (used by edc011-dcp-transfer.py). SIMPL_SEED_JSON is a JSON array of
+     * {id, did, privateJwk, publicJwk, rawVc|null, types[], issuer, attributes[]}. Each entry becomes a
+     * participant context with the injected key, plus (when rawVc is set) one issued credential.
+     */
+    @SuppressWarnings("unchecked")
+    private void seedMany(String json) {
+        List<Map<String, Object>> entries;
+        try {
+            entries = new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, List.class);
+        } catch (Exception e) {
+            monitor.warning("[SIMPL-SEED] bad SIMPL_SEED_JSON: " + e.getMessage());
+            return;
+        }
+        var first = true;
+        for (var e : entries) {
+            var id = (String) e.get("id");
+            var did = (String) e.get("did");
+            var alias = id + "-alias";
+            vault.storeSecret(alias, String.valueOf(e.get("privateJwk")));
+            var manifest = ParticipantManifest.Builder.newInstance()
+                    .participantId(id)
+                    .active(true)
+                    .did(did)
+                    .serviceEndpoint(new Service(id + "-cs", "CredentialService", "http://localhost:8182/api/resolution/v1/participants/" + id))
+                    .roles(first ? List.of(ServicePrincipal.ROLE_ADMIN) : List.of())
+                    .key(KeyDescriptor.Builder.newInstance()
+                            .keyId(did + "#key-1")
+                            .privateKeyAlias(alias)
+                            .resourceId(id + "-key")
+                            .publicKeyJwk(parseJwk(String.valueOf(e.get("publicJwk"))))
+                            .build())
+                    .build();
+            first = false;
+            var pr = participants.createParticipantContext(manifest);
+            monitor.info("[SIMPL-SEED] participant " + id + " (" + did + "): " + (pr.succeeded() ? "created" : pr.getFailureDetail()));
+
+            var rawVc = (String) e.get("rawVc");
+            if (rawVc == null || rawVc.isBlank()) {
+                monitor.info("[SIMPL-SEED] participant " + id + " holds NO credential");
+                continue;
+            }
+            var issuer = (String) e.get("issuer");
+            var attributes = (List<String>) e.getOrDefault("attributes", List.of());
+            var subject = CredentialSubject.Builder.newInstance().id(did).claim("identityAttributes", attributes).build();
+            var vcBuilder = (VerifiableCredential.Builder) VerifiableCredential.Builder.newInstance();
+            ((List<String>) e.getOrDefault("types", List.of("VerifiableCredential", "SimplDataspaceMembershipCredential")))
+                    .forEach(vcBuilder::type);
+            VerifiableCredential vc = (VerifiableCredential) vcBuilder
+                    .id("urn:uuid:" + id + "-membership")
+                    .issuer(new Issuer(issuer))
+                    .issuanceDate(Instant.now())
+                    .credentialSubject(subject)
+                    .build();
+            var resource = VerifiableCredentialResource.Builder.newInstance()
+                    .id("urn:uuid:" + id + "-vc-resource")
+                    .participantId(id)
+                    .issuerId(issuer)
+                    .holderId(did)
+                    .state(VcStatus.ISSUED)
+                    .credential(new VerifiableCredentialContainer(rawVc, CredentialFormat.VC1_0_JWT, vc))
+                    .build();
+            var cr = credentials.create(resource);
+            monitor.info("[SIMPL-SEED] credential for " + id + " " + attributes + ": " + (cr.succeeded() ? "OK" : cr.getFailureDetail()));
+        }
+        monitor.info("[SIMPL-SEED] done (multi).");
     }
 
     private static String env(String k, String dflt) {
