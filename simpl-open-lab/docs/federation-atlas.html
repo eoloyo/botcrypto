@@ -94,6 +94,17 @@ button,input{font:inherit;color:inherit}
 .hit{opacity:1}
 @media (prefers-reduced-motion:no-preference){ .node,.edge{transition:opacity .2s} }
 
+/* finding */
+.finding{max-width:1500px;margin:18px auto 0;background:var(--ink);color:var(--bg);border-radius:12px;padding:20px clamp(16px,2.4vw,28px) 18px}
+.finding .kicker{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;opacity:.75;margin:0 0 8px}
+.finding h2{font:600 clamp(20px,2.4vw,27px)/1.2 var(--cond);margin:0 0 14px;max-width:44ch;text-wrap:balance}
+.finding ol{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 32px;counter-reset:r}
+.finding li{counter-increment:r;display:grid;grid-template-columns:auto 1fr;gap:10px;font-size:14.5px;line-height:1.5}
+.finding li::before{content:counter(r);font:600 12px/1 var(--mono);border:1px solid currentColor;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;opacity:.8;margin-top:1px}
+.finding .conf{margin:14px 0 0;font-size:13.5px;opacity:.82;max-width:120ch}
+.finding .linkish{color:inherit}
+@media (max-width:860px){.finding ol{grid-template-columns:1fr}}
+
 /* panel */
 .panel{position:absolute;top:12px;right:12px;width:min(390px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:18px 18px 20px;box-shadow:0 10px 30px rgba(10,20,15,.16)}
 .panel h2,.guide h2{font:600 21px/1.2 var(--cond);margin:0 0 4px;text-wrap:balance}
@@ -152,6 +163,18 @@ button,input{font:inherit;color:inherit}
   </div>
   <div class="stats" id="stats"></div>
 </header>
+
+<section class="finding" aria-labelledby="finding-h">
+  <p class="kicker">Finding</p>
+  <h2 id="finding-h">What stops Simpl-Open from federating with any data space is a decision, not missing technology.</h2>
+  <ol>
+    <li><span><b>The target is law.</b> <button class="linkish" data-go="art33">Data Act Art. 33</button> has applied since 12 September 2025, and <button class="linkish" data-go="en18235">EN 18235-1</button> (April 2026) is the first standard of the harmonised set behind it. Conforming will count as compliance.</span></li>
+    <li><span><b>The building blocks exist.</b> <button class="linkish" data-go="dsp">DSP</button>, <button class="linkish" data-go="dcp">DCP</button>, DCAT-AP and ODRL as pivots; <button class="linkish" data-go="itb">ITB</button>, <button class="linkish" data-go="dss">DSS with the Trusted Lists</button> and piveau as running EU code; <button class="linkish" data-go="oots">OOTS</button> as a federation pattern in production.</span></li>
+    <li><span><b>One piece is missing everywhere:</b> explicit, testable handling of what gets lost in translation: a <button class="linkish" data-go="g-fid">fidelity contract</button>, a <button class="linkish" data-go="g-fdesc">federation descriptor</button>, and governed proxy vs identity-preserving mediation. That is where Simpl can contribute.</span></li>
+    <li><span><b>The technical distance is small, and now demonstrated.</b> In the lab, Simpl's connector moved to EDC 0.11 with three pom lines, switched its identity to DCP, and <button class="linkish" data-go="lab-e3">completed a transfer gated by a DCP-verified membership credential</button>, with Simpl's own ABAC rule deciding on the credential's claims. Untrusted issuers, missing credentials and insufficient attributes are rejected.</span></li>
+  </ol>
+  <p class="conf"><b>What follows:</b> revisit the pairwise trust model of ADR 008, extend DCP to machine identity, set Art. 33 / EN 18235 conformance as the target in EIF terms, build from EU building blocks and EDC, and contribute the fidelity contract. <b>Confidence:</b> the legal, standards, OOTS and lab results are checked or run; a few ecosystem items (Catena-X, iSHARE) rest on background knowledge; the lab uses did:web over http and one shared IdentityHub, not a production deployment.</p>
+</section>
 
 <div class="controls" role="toolbar" aria-label="Map controls">
   <label class="search" for="q"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="q" type="search" placeholder="Search: OOTS, Art. 33, trust list…" autocomplete="off"><span class="n" id="qn"></span></label>
@@ -284,9 +307,9 @@ const N=[
  {id:"g-fid",p:"gaps",gap:1,label:"Testable fidelity contract",L:["X"],s:"p",what:"No framework declares, per layer, how much is lost when translating between data spaces. DS2's PCR-COMPARE covers policy only; the OOTS Evidence Broker covers evidence types only.",why:"Define the contract and test it on ITB, so a lossy translation is a visible, governed decision."},
  {id:"g-fdesc",p:"gaps",gap:1,label:"Standard federation descriptor",L:["L","O"],s:"p",what:"DS2's collaboration agreements and the DSSC rulebook idea come closest. Neither is a standard or machine-readable across frameworks.",why:"Without it, every federation is a bespoke contract."},
  {id:"g-mode",p:"gaps",gap:1,label:"Proxy vs identity-preserving, governed",L:["O"],s:"p",what:"Every bridge acts either under its own identity (proxy) or passes the real requester through. Nobody makes that choice explicit and governed.",why:"Proxy mediation loses who really asked, so the remote policy cannot judge the real party."},
- {id:"g-l4",p:"gaps",gap:1,label:"Native cross-DS federation in production",L:["T","O"],s:"k",what:"Catena-X runs EDC with DCP natively, but within one data space. Native federation between two independently governed data spaces is not yet in production anywhere I found.",why:"L4 remains a target, not a reference deployment."},
+ {id:"g-l4",p:"gaps",gap:1,label:"Native cross-DS federation in production",L:["T","O"],s:"k",what:"Catena-X runs EDC with DCP natively, but within one data space. Native federation between two independently governed data spaces is not yet in production anywhere I found. The lab shows the mechanics between two Simpl connectors (E3).",why:"L4 remains a target, not a reference deployment."},
  {id:"g-fedorch",p:"gaps",gap:1,label:"Simpl: federation orchestration",L:["O","T"],s:"v",src:["fed"],what:"Specified in Simpl's capability map and ADR 008 (pairwise trust between governance authorities), but the integration/federation repository is marked not yet implemented.",why:"Even Simpl-to-Simpl federation does not exist yet."},
- {id:"g-tier2",p:"gaps",gap:1,label:"Simpl: machine identity not on DCP",L:["T","O"],s:"v",what:"Simpl's self-sovereign identity plan (ADR 007, walt.id) covers human login only. Connectors still authenticate with X.509, mTLS and an ephemeral proof.",why:"Framework-bound identity blocks federation with non-Simpl spaces. Lab increment E shows the swap is small in code."},
+ {id:"g-tier2",p:"gaps",gap:1,label:"Simpl: machine identity not on DCP",L:["T","O"],s:"v",what:"Simpl's self-sovereign identity plan (ADR 007, walt.id) covers human login only. Connectors still authenticate with X.509, mTLS and an ephemeral proof.",why:"Framework-bound identity blocks federation with non-Simpl spaces. The lab shows the full DCP path working on Simpl's connector (increments E and E3)."},
  {id:"g-pull",p:"gaps",gap:1,label:"Simpl: consumer pull (EDR) not enabled",L:["T"],s:"v",what:"Simpl's basic connector ships HttpData transfers but not consumer-pull endpoint data references.",why:"Pull access is how most external data spaces expose data."},
  {id:"g-path",p:"gaps",label:"Simpl's contribution path",L:["X"],s:"p",what:"Frame federation as conformance to Data Act Art. 33 and EN 18235, expressed in EIF layers. Assemble it from EU building blocks and EDC. Contribute the fidelity contract and the federation descriptor to JTC 25, DSSC or the Eclipse Dataspace Working Group.",why:"Compose, don't build: the EIF reusability principle applied to Simpl."},
 
@@ -329,13 +352,14 @@ const N=[
  {id:"fidelity",p:"ours",label:"Fidelity contract",gap:1,L:["X"],s:"p",what:"Each adapter declares, per layer, whether its translation is exact, lossy or unsupported. The federation agreement sets the reaction, for example lossy policy leads to deny.",why:"Makes translation loss explicit instead of hidden inside a bridge. Not found anywhere as a general mechanism."},
  {id:"fdesc",p:"ours",label:"Federation descriptor",gap:1,L:["L","O"],s:"p",what:"A machine-readable agreement per peer: recognised trust anchors, mapped profiles, accepted fidelity, and liability and dispute terms.",why:"Turns a federation into configuration that can be reviewed and tested."},
  {id:"trustreg",p:"ours",label:"Multi-framework trust registry",L:["O"],s:"p",what:"Accepts anchors from the Simpl governance authority, eIDAS trusted lists, Gaia-X, DAPS and iSHARE, resolved with existing tools such as DSS and TRAIN.",why:"Replaces N² bilateral trust agreements."},
- {id:"maturity",p:"ours",label:"Maturity L0 to L4",L:["X"],s:"p",what:"L0 isolated · L1 catalogue only · L2 mediated proxy · L3 mediated identity-preserving · L4 native. Simpl today sits at L0 to L2.",why:"A way to say how far a given federation goes."},
+ {id:"maturity",p:"ours",label:"Maturity L0 to L4",L:["X"],s:"p",what:"L0 isolated · L1 catalogue only · L2 mediated proxy · L3 mediated identity-preserving · L4 native. Simpl today sits at L0 to L2; the lab shows L4 mechanics between two Simpl connectors.",why:"A way to say how far a given federation goes."},
 
  {id:"lab",p:"root",side:-1,c:"--b-lab",label:"Lab evidence",tag:"Branch claude/simpl-architecture-review-whjy1n",L:["T"],s:"l",src:["lab"],what:"Increments built and run on the claude/simpl-architecture-review-whjy1n branch.",why:"Evidence that the pivots and extension points work on real Simpl code."},
  {id:"lab-a",p:"lab",label:"A · DCP on walt.id",L:["T","O"],s:"l",src:["lab"],what:"Issue, hold, present over OpenID4VP and verify a SimplDataspaceMembershipCredential on Simpl's ADR 007 stack. Commit 14b7f7b.",why:"The credential mechanics work on Simpl's chosen stack."},
  {id:"lab-bc",p:"lab",label:"B/C · IdentityHub on EDC 0.11",L:["T","O"],s:"l",src:["lab"],what:"Built IdentityHub v0.11.1 from source, seeded the credential, and completed a verified DCP presentation. Commits 7738b91 to c3cb3c3.",why:"The native DCP flow works on the EDC 0.11 line."},
  {id:"lab-d",p:"lab",label:"D · connector-be to EDC 0.11.1",L:["T"],s:"l",src:["lab"],what:"Three pom lines and no Java changes; a provider-to-consumer transfer completed. Commit 914f163.",why:"Simpl's connector can join the current DSP line cheaply."},
- {id:"lab-e",p:"lab",label:"E · connector on DCP identity",L:["T","O"],s:"l",src:["lab"],what:"Simpl's X.509 identity service replaced by EDC's DCP identity service; the connector boots ready. The two-connector, credential-gated transfer is still open. Commit 86925e6.",why:"The identity pivot fits Simpl's connector."},
+ {id:"lab-e",p:"lab",label:"E · connector on DCP identity",L:["T","O"],s:"l",src:["lab"],what:"Simpl's X.509 identity service replaced by EDC's DCP identity service; the connector boots ready. Commit 86925e6.",why:"The identity pivot fits Simpl's connector."},
+ {id:"lab-e3",p:"lab",label:"E3 · credential-gated transfer",L:["T","O"],s:"l",src:["lab"],what:"Two Simpl connectors on DCP, backed by one IdentityHub, complete a DSP transfer gated by a GA-signed SimplDataspaceMembershipCredential. A small extension requires the membership scope on every DSP request and maps the verified credential into Simpl's identity_attributes, so Simpl's existing edc:consumption rule decides. Four scenarios pass: transfer completed; negotiation terminated when the credential lacks CONSUMER; rejected when the provider does not trust the issuer; rejected when the consumer holds no credential.",why:"Native federation mechanics on real Simpl code: trust comes from verifiable credentials that each side checks directly, not from a shared X.509 CA or a bridge."},
  {id:"lab-sparql",p:"lab",label:"SPARQL as a governed data product",L:["T","S"],s:"l",src:["lab"],what:"A SPARQL endpoint served through the standard HttpData data plane (script 11).",why:"Data-plane adapters can be plain configuration."},
  {id:"lab-edel",p:"lab",label:"eDelivery data plane in connector-be",L:["T"],s:"v",src:["lab"],what:"connector-be ships an eDelivery source, sink, validators and a backend client under the type \"eDelivery\". Read in the code, not run.",why:"Simpl already plugs an EU building block into EDC as an adapter."}
 ];
@@ -364,7 +388,9 @@ const X=[
  ["piveau","dcatap","Harvests national portals and normalises them to DCAT-AP."],
  ["en18235","fdesc","Shared terms (data product, roles, rights) that a federation descriptor can reference."],
  ["xfsc","train","TRAIN is now part of XFSC."],
- ["g-tier2","lab-e","Increment E shows the DCP swap is small in code."],
+ ["g-tier2","lab-e3","Stage E3 shows the full DCP path working on Simpl's connector."],
+ ["lab-e3","native","Native mode in miniature: connectors verify each other's credentials directly, with no gateway in the data path."],
+ ["lab-e3","dcp","A DCP presentation and verification inside every DSP request."],
  ["g-fedorch","maturity","Without orchestration Simpl stays at L0 to L2."]
 ];
 const LAYERS={L:["Legal","--legal"],O:["Organisational","--org"],S:["Semantic","--sem"],T:["Technical","--tech"],X:["All layers","--cross"]};
@@ -676,6 +702,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&sel)clearSel(); })
 function boot(){
   try{ const v=localStorage.getItem("fa-lens"); if(v==="layer"||v==="branch"){lens=v;lb.setAttribute("aria-pressed",v==="branch");ll.setAttribute("aria-pressed",v==="layer");} }catch(_){}
   buildOutline(); renderGuide(); render(); fit();
+  document.querySelectorAll(".finding [data-go]").forEach(b=>b.onclick=()=>{select(b.dataset.go,true);document.getElementById("wrap").scrollIntoView({behavior:"smooth",block:"nearest"});});
   const h=(location.hash||"").slice(1);
   if(h&&byId[h])select(h,false); else panel(null);
   if(window.matchMedia&&window.matchMedia("(max-width: 700px)").matches)document.getElementById("outline").open=true;
