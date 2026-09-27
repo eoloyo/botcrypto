@@ -8,7 +8,7 @@
   --legal:#4254C4; --org:#0E7C71; --sem:#9C5F0C; --tech:#4F5E78; --cross:#17201C;
   --gap:#BF3326;
   --b-law:#4254C4; --b-std:#9C5F0C; --b-fw:#0E7C71; --b-eu:#1D69AA; --b-comp:#56647A;
-  --b-ds2:#85437F; --b-ours:#2A3832; --b-gaps:#BF3326; --b-lab:#3A7530;
+  --b-ds2:#85437F; --b-ours:#2A3832; --b-gaps:#BF3326; --b-lab:#3A7530; --b-prac:#6B6A12;
   --focus:#1D69AA;
   --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --cond:"IBM Plex Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
@@ -21,7 +21,7 @@
     --legal:#8E9BF3; --org:#4CC0B0; --sem:#E0A24C; --tech:#A2B2CA; --cross:#E2E9E4;
     --gap:#F17D70;
     --b-law:#8E9BF3; --b-std:#E0A24C; --b-fw:#4CC0B0; --b-eu:#6BAEE6; --b-comp:#A2B2CA;
-    --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B;
+    --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B; --b-prac:#CFCB6A;
     --focus:#6BAEE6;
   }
 }
@@ -31,7 +31,7 @@
   --legal:#8E9BF3; --org:#4CC0B0; --sem:#E0A24C; --tech:#A2B2CA; --cross:#E2E9E4;
   --gap:#F17D70;
   --b-law:#8E9BF3; --b-std:#E0A24C; --b-fw:#4CC0B0; --b-eu:#6BAEE6; --b-comp:#A2B2CA;
-  --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B;
+  --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B; --b-prac:#CFCB6A;
   --focus:#6BAEE6;
 }
 *{box-sizing:border-box}
@@ -235,7 +235,14 @@ const SRC={
   edc:["Eclipse EDC Connector","https://github.com/eclipse-edc/Connector"],
   ih:["Eclipse EDC IdentityHub","https://github.com/eclipse-edc/IdentityHub"],
   lab:["Lab code on branch claude/simpl-architecture-review-whjy1n","https://github.com/eoloyo/botcrypto/tree/claude/simpl-architecture-review-whjy1n/simpl-open-lab"],
-  fed:["Simpl-Open integration/federation","https://code.europa.eu/simpl/simpl-open/integration/federation"]
+  fed:["Simpl-Open integration/federation","https://code.europa.eu/simpl/simpl-open/integration/federation"],
+  dsrCode:["EU LDT Data Space Ready source (code.europa.eu, EUPL-1.2)","https://code.europa.eu/ldt-toolbox/eu_ldt_data_space_ready"],
+  iris360:["Libelium: iris360 Data Space, the gateway to European data spaces","https://www.libelium.com/libeliumworld/iris360-data-space-the-gateway-to-european-data-spaces/"],
+  sedia:["Libelium leads SEDIA data spaces in Spain","https://www.libelium.com/es/libeliumworld/libelium-lidera-espacio-de-datos-sedia-espana/"],
+  nexmoF:["Forbes España: Orange and Libelium launch the NEXMO data space with UC3M","https://forbes.es/ultima-hora/1013060/orange-y-libelium-se-unen-a-la-uc3m-para-lanzar-el-espacio-de-datos-nexmo/"],
+  nexmoE:["La Ecuación Digital: NEXMO connects mobility data for UC3M","https://www.laecuaciondigital.com/tecnologias/big-data/nexmo-datos-movilidad-orange-libelium-uc3m/"],
+  nexmoC:["Conecta Industria: a data space to predict loading-zone occupancy","https://www.conectaindustria.es/innovacion/espacio-datos-permitira-predecir-ocupacion-zonas-carga-descarga/20260908071500015294.html"],
+  ds4sscc:["DS4SSCC-DEP pilot: Geo4Water","https://www.ds4sscc.eu/geo4water"]
 };
 // s: v = checked this session · k = background knowledge · l = proven in lab · p = our proposal
 const N=[
@@ -306,12 +313,23 @@ const N=[
  {id:"gaps",p:"root",side:1,c:"--b-gaps",label:"Gaps & Simpl's role",L:["X"],s:"p",what:"What no framework or product covers yet, what Simpl-Open lacks today, and where Simpl could contribute.",why:"The reason to build anything at all."},
  {id:"g-fid",p:"gaps",gap:1,label:"Testable fidelity contract",L:["X"],s:"p",what:"No framework declares, per layer, how much is lost when translating between data spaces. DS2's PCR-COMPARE covers policy only; the OOTS Evidence Broker covers evidence types only.",why:"Define the contract and test it on ITB, so a lossy translation is a visible, governed decision."},
  {id:"g-fdesc",p:"gaps",gap:1,label:"Standard federation descriptor",L:["L","O"],s:"p",what:"DS2's collaboration agreements and the DSSC rulebook idea come closest. Neither is a standard or machine-readable across frameworks.",why:"Without it, every federation is a bespoke contract."},
- {id:"g-mode",p:"gaps",gap:1,label:"Proxy vs identity-preserving, governed",L:["O"],s:"p",what:"Every bridge acts either under its own identity (proxy) or passes the real requester through. Nobody makes that choice explicit and governed.",why:"Proxy mediation loses who really asked, so the remote policy cannot judge the real party."},
+ {id:"g-mode",p:"gaps",gap:1,label:"Proxy vs identity-preserving, governed",L:["O"],s:"p",what:"Every bridge acts either under its own identity (proxy) or passes the real requester through. Nobody makes that choice explicit and governed. Data Space Ready shows the demand for multi-connector operation, but it stops at the management plane.",why:"Proxy mediation loses who really asked, so the remote policy cannot judge the real party."},
  {id:"g-l4",p:"gaps",gap:1,label:"Native cross-DS federation in production",L:["T","O"],s:"k",what:"Catena-X runs EDC with DCP natively, but within one data space. Native federation between two independently governed data spaces is not yet in production anywhere I found. The lab shows the mechanics between two Simpl connectors (E3).",why:"L4 remains a target, not a reference deployment."},
  {id:"g-fedorch",p:"gaps",gap:1,label:"Simpl: federation orchestration",L:["O","T"],s:"v",src:["fed"],what:"Specified in Simpl's capability map and ADR 008 (pairwise trust between governance authorities), but the integration/federation repository is marked not yet implemented.",why:"Even Simpl-to-Simpl federation does not exist yet."},
  {id:"g-tier2",p:"gaps",gap:1,label:"Simpl: machine identity not on DCP",L:["T","O"],s:"v",what:"Simpl's self-sovereign identity plan (ADR 007, walt.id) covers human login only. Connectors still authenticate with X.509, mTLS and an ephemeral proof.",why:"Framework-bound identity blocks federation with non-Simpl spaces. The lab shows the full DCP path working on Simpl's connector (increments E and E3)."},
  {id:"g-pull",p:"gaps",gap:1,label:"Simpl: consumer pull (EDR) not enabled",L:["T"],s:"v",what:"Simpl's basic connector ships HttpData transfers but not consumer-pull endpoint data references.",why:"Pull access is how most external data spaces expose data."},
  {id:"g-path",p:"gaps",label:"Simpl's contribution path",L:["X"],s:"p",what:"Frame federation as conformance to Data Act Art. 33 and EN 18235, expressed in EIF layers. Assemble it from EU building blocks and EDC. Contribute the fidelity contract and the federation descriptor to JTC 25, DSSC or the Eclipse Dataspace Working Group.",why:"Compose, don't build: the EIF reusability principle applied to Simpl."},
+
+ {id:"prac",p:"root",side:1,c:"--b-prac",label:"Deployments & orchestrators",L:["T","O"],s:"v",what:"Products and live data spaces that already put several connector families side by side.",why:"Shows what the market builds when it needs to span data spaces today, and where it stops."},
+ {id:"dsr",p:"prac",label:"Data Space Ready (Libelium)",tag:"EU LDT Toolbox · EUPL-1.2 · code.europa.eu",L:["T","O"],s:"v",src:["dsrCode","iris360"],
+  what:"Open-source tool of the EU Local Digital Twin Toolbox, © European Commission, written mainly by Libelium with NUNSYS and Inycom. A Python backend with a React frontend that registers and operates several connectors from one console. Its stated purpose: integrate an LDT Toolbox deployment into data spaces in a standardised way.",
+  why:"The closest running thing to a multi-connector control plane. It federates operations, not identities: each connector still talks only to peers of its own kind."},
+ {id:"dsr-adapt",p:"dsr",label:"Canonical facades + adapters",L:["T","S"],s:"v",src:["dsrCode"],what:"Asset, policy (ODRL), catalogue, contract, search and audit facades. Behind them: EDC adapters on Management API v3 with protocol dataspace-protocol-http (sovity, Tractus-X), FIWARE Data Space Connector adapters on TM Forum TMF620/633, and adapter factories keyed on connector_type = edc, ngsi-ld, simpl or custom.",why:"The canonical-pivot pattern at the management plane: one model in the console, translated per connector."},
+ {id:"dsr-trust",p:"dsr",label:"did:web, OID4VCI, TIL, Gaia-X",L:["O"],s:"v",src:["dsrCode"],what:"did:web per organisation, credential offers through Keycloak OID4VCI, a client for an EBSI-compatible Trusted Issuers List, and a Gaia-X compliance helper. It follows the FIWARE trust stack.",why:"One trust framework per deployment, not a registry that recognises several frameworks at once."},
+ {id:"dsr-simpl",p:"dsr",gap:1,label:"Simpl support is thin",L:["T"],s:"v",src:["dsrCode"],what:"A simpl connector type exists, but verification only pings a control endpoint (capability simpl-api), contract definitions fall back to the EDC adapter, and catalogue management raises UnsupportedConnectorError for both edc and simpl. There is no Simpl identity or onboarding path.",why:"A Simpl connector on EDC 0.11 with DCP (lab D and E) matches what the EDC adapter drives. That path is plausible but untested."},
+ {id:"iris360",p:"prac",label:"iris360 Data Space",L:["T"],s:"v",src:["iris360","sedia"],what:"Libelium's commercial data-space offer around its iris360 IoT platform, presented as a gateway to European data spaces. Libelium also leads SEDIA-funded data-space deployments in Spain.",why:"Where Data Space Ready meets real customers."},
+ {id:"nexmo",p:"prac",label:"NEXMO mobility data space",tag:"UC3M · MovEDIHub · SEDIA funding",L:["T","O"],s:"v",src:["nexmoF","nexmoE","nexmoC"],what:"Public press only: a mobility data space run by Universidad Carlos III de Madrid as a neutral operator, in the MovEDIHub project with Next Generation EU funding via SEDIA. Orange and Libelium deployed the infrastructure with Eclipse EDC connectors. Owners set who may use which data for what purpose, and can revoke it. First use case: predicting loading-zone occupancy for last-mile delivery. The press also notes that participants and available datasets were not yet disclosed at launch.",why:"An EDC data space outside Simpl, with its infrastructure in place, and a natural first peer for Simpl federation. The press itself notes the hard part is getting parties to share, not the connector."},
+ {id:"ds4sscc",p:"prac",label:"DS4SSCC-DEP · Geo4Water",L:["O"],s:"v",src:["ds4sscc"],what:"Smart-community data space deployment pilots. Geo4Water is one pilot; Libelium is a partner.",why:"The smart-city context in which Libelium also works with Simpl."},
 
  // ---------------- left side
  {id:"fw",p:"root",side:-1,c:"--b-fw",label:"Frameworks",L:["X"],s:"v",what:"Conceptual frameworks and reference architectures. They say what to reconcile and by what principles, but ship no runtime.",why:"The frame the Commission audience already uses."},
@@ -391,7 +409,17 @@ const X=[
  ["g-tier2","lab-e3","Stage E3 shows the full DCP path working on Simpl's connector."],
  ["lab-e3","native","Native mode in miniature: connectors verify each other's credentials directly, with no gateway in the data path."],
  ["lab-e3","dcp","A DCP presentation and verification inside every DSP request."],
- ["g-fedorch","maturity","Without orchestration Simpl stays at L0 to L2."]
+ ["g-fedorch","maturity","Without orchestration Simpl stays at L0 to L2."],
+ ["dsr-adapt","fiware","FIWARE Data Space Connector adapters on TM Forum TMF620/633."],
+ ["dsr-adapt","edc","EDC adapters on Management API v3 (sovity, Tractus-X)."],
+ ["dsr-adapt","pivot","The same pivot idea, applied to the management plane only."],
+ ["dsr","mediated","Management-plane mediation: one console, but no identity crosses between connector families."],
+ ["dsr-adapt","fidelity","No per-layer fidelity is declared; catalogue is simply unsupported for EDC and Simpl."],
+ ["dsr-trust","trustreg","One Trusted Issuers List per deployment, not a registry recognising several frameworks."],
+ ["dsr-simpl","lab-e","connector-be on EDC 0.11 with DCP has the shape the EDC adapter drives (untested)."],
+ ["nexmo","edc","NEXMO runs Eclipse EDC connectors, deployed by Orange and Libelium."],
+ ["nexmo","g-l4","An independently governed EDC data space: a candidate first peer for native federation with Simpl."],
+ ["ds4sscc","g-path","Smart-city pilots where Simpl and other stacks meet."]
 ];
 const LAYERS={L:["Legal","--legal"],O:["Organisational","--org"],S:["Semantic","--sem"],T:["Technical","--tech"],X:["All layers","--cross"]};
 const STATUS={v:"Checked against a source this session",k:"From background knowledge, not re-checked",l:"Proven in the lab on this branch",p:"Our design proposal"};
@@ -653,7 +681,7 @@ function renderGuide(){
   const G=document.getElementById("guide");
   G.innerHTML=`<div>
    <h2>Reading the map</h2>
-   <p>The centre asks one question. On the right: what binds and what already runs (law, standards, EU running code) and the gaps. On the left: frameworks, components, the DS2 reference, our proposal and the lab evidence. Dashed lines connect items across branches. Click any node for details and sources.</p>
+   <p>The centre asks one question. On the right: what binds and what already runs (law, standards, EU running code), the gaps, and deployments and orchestrators already in the field. On the left: frameworks, components, the DS2 reference, our proposal and the lab evidence. Dashed lines connect items across branches. Click any node for details and sources.</p>
    <h3>Marker = how sure</h3>
    <div class="legend">
     ${statusGlyph("v")}<span>Checked against a source this session</span>
