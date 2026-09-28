@@ -8,7 +8,7 @@
   --legal:#4254C4; --org:#0E7C71; --sem:#9C5F0C; --tech:#4F5E78; --cross:#17201C;
   --gap:#BF3326;
   --b-law:#4254C4; --b-std:#9C5F0C; --b-fw:#0E7C71; --b-eu:#1D69AA; --b-comp:#56647A;
-  --b-ds2:#85437F; --b-ours:#2A3832; --b-gaps:#BF3326; --b-lab:#3A7530; --b-prac:#6B6A12;
+  --b-ds2:#85437F; --b-ours:#2A3832; --b-gaps:#BF3326; --b-lab:#3A7530; --b-prac:#6B6A12; --b-cmf:#A6365E;
   --focus:#1D69AA;
   --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --cond:"IBM Plex Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
@@ -21,7 +21,7 @@
     --legal:#8E9BF3; --org:#4CC0B0; --sem:#E0A24C; --tech:#A2B2CA; --cross:#E2E9E4;
     --gap:#F17D70;
     --b-law:#8E9BF3; --b-std:#E0A24C; --b-fw:#4CC0B0; --b-eu:#6BAEE6; --b-comp:#A2B2CA;
-    --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B; --b-prac:#CFCB6A;
+    --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B; --b-prac:#CFCB6A; --b-cmf:#EE8FB0;
     --focus:#6BAEE6;
   }
 }
@@ -31,7 +31,7 @@
   --legal:#8E9BF3; --org:#4CC0B0; --sem:#E0A24C; --tech:#A2B2CA; --cross:#E2E9E4;
   --gap:#F17D70;
   --b-law:#8E9BF3; --b-std:#E0A24C; --b-fw:#4CC0B0; --b-eu:#6BAEE6; --b-comp:#A2B2CA;
-  --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B; --b-prac:#CFCB6A;
+  --b-ds2:#CF8DC8; --b-ours:#D2DDD6; --b-gaps:#F17D70; --b-lab:#8CC47B; --b-prac:#CFCB6A; --b-cmf:#EE8FB0;
   --focus:#6BAEE6;
 }
 *{box-sizing:border-box}
@@ -170,7 +170,7 @@ button,input{font:inherit;color:inherit}
   <ol>
     <li><span><b>The target is law.</b> <button class="linkish" data-go="art33">Data Act Art. 33</button> has applied since 12 September 2025, and <button class="linkish" data-go="en18235">EN 18235-1</button> (April 2026) is the first standard of the harmonised set behind it. Conforming will count as compliance.</span></li>
     <li><span><b>The building blocks exist.</b> <button class="linkish" data-go="dsp">DSP</button>, <button class="linkish" data-go="dcp">DCP</button>, DCAT-AP and ODRL as pivots; <button class="linkish" data-go="itb">ITB</button>, <button class="linkish" data-go="dss">DSS with the Trusted Lists</button> and piveau as running EU code; <button class="linkish" data-go="oots">OOTS</button> as a federation pattern in production.</span></li>
-    <li><span><b>One piece is missing everywhere:</b> explicit, testable handling of what gets lost in translation: a <button class="linkish" data-go="g-fid">fidelity contract</button>, a <button class="linkish" data-go="g-fdesc">federation descriptor</button>, and governed proxy vs identity-preserving mediation. That is where Simpl can contribute.</span></li>
+    <li><span><b>One piece is missing everywhere:</b> explicit, testable handling of what gets lost in translation: a <button class="linkish" data-go="g-fid">fidelity contract</button>, a <button class="linkish" data-go="g-fdesc">federation descriptor</button>, and governed proxy vs identity-preserving mediation. The <button class="linkish" data-go="decide">DECIDe</button> pilot declined DSP for lack of exactly such a lower bound. That is where Simpl can contribute.</span></li>
     <li><span><b>The technical distance is small, and now demonstrated.</b> In the lab, Simpl's connector moved to EDC 0.11 with three pom lines, switched its identity to DCP, and <button class="linkish" data-go="lab-e3">completed a transfer gated by a DCP-verified membership credential</button>, with Simpl's own ABAC rule deciding on the credential's claims. Untrusted issuers, missing credentials and insufficient attributes are rejected.</span></li>
   </ol>
   <p class="conf"><b>What follows:</b> revisit the pairwise trust model of ADR 008, extend DCP to machine identity, set Art. 33 / EN 18235 conformance as the target in EIF terms, build from EU building blocks and EDC, and contribute the fidelity contract. <b>Confidence:</b> the legal, standards, OOTS and lab results are checked or run; a few ecosystem items (Catena-X, iSHARE) rest on background knowledge; the lab uses did:web over http and one shared IdentityHub, not a production deployment.</p>
@@ -242,7 +242,33 @@ const SRC={
   nexmoF:["Forbes España: Orange and Libelium launch the NEXMO data space with UC3M","https://forbes.es/ultima-hora/1013060/orange-y-libelium-se-unen-a-la-uc3m-para-lanzar-el-espacio-de-datos-nexmo/"],
   nexmoE:["La Ecuación Digital: NEXMO connects mobility data for UC3M","https://www.laecuaciondigital.com/tecnologias/big-data/nexmo-datos-movilidad-orange-libelium-uc3m/"],
   nexmoC:["Conecta Industria: a data space to predict loading-zone occupancy","https://www.conectaindustria.es/innovacion/espacio-datos-permitira-predecir-ocupacion-zonas-carga-descarga/20260908071500015294.html"],
-  ds4sscc:["DS4SSCC-DEP pilot: Geo4Water","https://www.ds4sscc.eu/geo4water"]
+  ds4sscc:["DS4SSCC-DEP pilot: Geo4Water","https://www.ds4sscc.eu/geo4water"],
+  decideDs:["DS4SSCC-DEP pilot: DECIDE","https://www.ds4sscc.eu/decide"],
+  decideCode:["lblod/app-decide (DECIDe stack)","https://github.com/lblod/app-decide"],
+  decideWrap:["lblod/decide-dsp-authorization-wrapper","https://github.com/lblod/decide-dsp-authorization-wrapper"],
+  decideVcCode:["lblod/oid4vc-login-service","https://github.com/lblod/oid4vc-login-service"],
+  decideDsp:["DECIDe write-up: Dataspace Protocol","https://abb-vlaanderen.gitbook.io/informatie-over-slimme-lokale-bronnen/decide-project/write-up-uc0.0-data-space/write-up-dsp"],
+  decideDcat:["DECIDe write-up: DCAT federation layer","https://abb-vlaanderen.gitbook.io/informatie-over-slimme-lokale-bronnen/decide-project/write-up-uc0.0-data-space/write-up-dcat"],
+  decideVc:["DECIDe write-up: Verifiable Credentials","https://abb-vlaanderen.gitbook.io/informatie-over-slimme-lokale-bronnen/decide-project/write-up-uc0.0-data-space/write-up-verifiable-credentials"],
+  uiDecide:["[ui!] DECIDE project site","https://decide.ui.city/"],
+  uiArch:["[ui!] DECIDE architecture","https://decide.ui.city/architecture.html"],
+  coedscFed:["CoE-DSC: Towards Scalable Data Space Interoperability and Federation (2024)","https://coe-dsc.nl/wp-content/uploads/2024/12/Towards-Scalable-Data-Space-Interoperability-and-Federation.pdf"],
+  coedscCcl:["CoE-DSC: Towards a Common Carrier Layer (2025)","https://coe-dsc.nl/towards-a-common-carrier-layer-for-large-scale-data-space-interoperability-and-federation/"],
+  domeGuide:["DOME integration and federation guide","https://github.com/DOME-Marketplace/integration-guide/blob/main/README.md"],
+  domeProj:["DOME project","https://dome-project.eu/"],
+  domeCde:["DOME and Cloud Data Engine collaboration","https://dome-project.eu/dome-and-cloud-data-engine-announce-strategic-collaboration/"],
+  simplCoffee:["Coffee with Simpl 3 recap (Simpl–DOME, LDS)","https://simpl-programme.ec.europa.eu/topic/coffee-simpl-3-session-recap"],
+  cispeCat:["CISPE: first federated cloud services catalogue","https://www.cispe.cloud/gaia-x-builds-momentum-with-first-federated-cloud-services-catalogue/"],
+  cispeSov:["CISPE: Verifiably Sovereign","https://www.cispe.cloud/verifiably-sovereign/"],
+  dawexCons:["Dawex: consortium contributions (DOME and others)","https://www.dawex.com/en/services/consortiums/"],
+  dawexDx:["Dawex: Decade-X France","https://www.dawex.com/en/news/dawex-delivers-its-data-exchange-technology-within-the-decade-x-france-project"],
+  decadex:["DECADE-X: about","https://www.decade-x.org/about-decade-x/"],
+  fulcrum:["Fulcrum Project","https://www.fulcrumproject.org/"],
+  fulcrumCode:["fulcrumproject/core","https://github.com/fulcrumproject/core"],
+  cispeFul:["CISPE: €1 million for Fulcrum (Mar 2025)","https://www.cispe.cloud/cispe-updates-its-cloud-sovereignty-principles-and-takes-action-with-e1-million-investment-in-open-source-to-deploy-distributed-cloud/"],
+  engFul:["Engineering and Fulcrum (Oct 2025)","https://www.eng.it/en/news/press-releases/2025/10/engineering-e-fulcrum-insieme-per-realizzare-il-cloud-federato-europeo-multi-provider"],
+  ecofed:["ECOFED launch","https://ecofed.eu/news/dutch-project-launches-to-help-cloud-users-have-freedom-of-choice"],
+  ecofedTz:["Techzine: ECOFED","https://www.techzine.eu/blogs/infrastructure/128950/ecofed-dutch-cloud-project-for-european-digital-sovereignty/"]
 };
 // s: v = checked this session · k = background knowledge · l = proven in lab · p = our proposal
 const N=[
@@ -265,6 +291,7 @@ const N=[
  {id:"sdgr",p:"law",label:"Single Digital Gateway + IR 2022/1463",tag:"SDGR Art. 14",L:["L"],s:"v",src:["oots"],
   what:"SDGR Art. 14 requires a technical system for the automated cross-border exchange of evidence between authorities. Implementing Regulation 2022/1463 specifies it.",
   why:"The legal basis of OOTS: EU law mandating one federated technical system across heterogeneous national systems."},
+ {id:"dact-cloud",p:"law",label:"Data Act: cloud switching + DPS interoperability",tag:"Ch. VI and Art. 34–35",L:["L","T"],s:"k",what:"Besides Art. 33 for data spaces, the Data Act obliges data processing services (cloud) to support switching between providers and interoperability, backed by open interoperability specifications and standards.",why:"The legal hook for cloud federation projects such as FULCRUM and ECOFED. It is a different obligation from data-space interoperability. Article numbers not re-checked this session."},
  {id:"eidas",p:"law",label:"eIDAS 2.0 and the EUDI Wallet",tag:"ETSI TS 119 612 · TS 119 602 · CIR 2024/2980",L:["O","L"],s:"v",src:["dss"],
   what:"The EU framework for trust services and digital identity. Trusted lists and the new List of Trusted Entities publish, in machine-readable form, who is trusted to issue what.",
   why:"The most authoritative trust anchors in Europe. A multi-framework trust registry should consume them rather than re-create them."},
@@ -312,11 +339,11 @@ const N=[
 
  {id:"gaps",p:"root",side:1,c:"--b-gaps",label:"Gaps & Simpl's role",L:["X"],s:"p",what:"What no framework or product covers yet, what Simpl-Open lacks today, and where Simpl could contribute.",why:"The reason to build anything at all."},
  {id:"g-fid",p:"gaps",gap:1,label:"Testable fidelity contract",L:["X"],s:"p",what:"No framework declares, per layer, how much is lost when translating between data spaces. DS2's PCR-COMPARE covers policy only; the OOTS Evidence Broker covers evidence types only.",why:"Define the contract and test it on ITB, so a lossy translation is a visible, governed decision."},
- {id:"g-fdesc",p:"gaps",gap:1,label:"Standard federation descriptor",L:["L","O"],s:"p",what:"DS2's collaboration agreements and the DSSC rulebook idea come closest. Neither is a standard or machine-readable across frameworks.",why:"Without it, every federation is a bespoke contract."},
- {id:"g-mode",p:"gaps",gap:1,label:"Proxy vs identity-preserving, governed",L:["O"],s:"p",what:"Every bridge acts either under its own identity (proxy) or passes the real requester through. Nobody makes that choice explicit and governed. Data Space Ready shows the demand for multi-connector operation, but it stops at the management plane.",why:"Proxy mediation loses who really asked, so the remote policy cannot judge the real party."},
+ {id:"g-fdesc",p:"gaps",gap:1,label:"Standard federation descriptor",L:["L","O"],s:"p",what:"DS2's collaboration agreements and the DSSC rulebook idea come closest. Neither is a standard or machine-readable across frameworks. DECIDe declined DSP precisely because it fixes no mandatory lower bound (callback formats, wire protocols, tokens).",why:"Without it, every federation is a bespoke contract."},
+ {id:"g-mode",p:"gaps",gap:1,label:"Proxy vs identity-preserving, governed",L:["O"],s:"p",what:"Every bridge acts either under its own identity (proxy) or passes the real requester through. Nobody makes that choice explicit and governed. Data Space Ready shows the demand for multi-connector operation, but it stops at the management plane. DECIDe runs a proxy in production: a licence level in a header, trusted by the provider.",why:"Proxy mediation loses who really asked, so the remote policy cannot judge the real party."},
  {id:"g-l4",p:"gaps",gap:1,label:"Native cross-DS federation in production",L:["T","O"],s:"k",what:"Catena-X runs EDC with DCP natively, but within one data space. Native federation between two independently governed data spaces is not yet in production anywhere I found. The lab shows the mechanics between two Simpl connectors (E3).",why:"L4 remains a target, not a reference deployment."},
  {id:"g-fedorch",p:"gaps",gap:1,label:"Simpl: federation orchestration",L:["O","T"],s:"v",src:["fed"],what:"Specified in Simpl's capability map and ADR 008 (pairwise trust between governance authorities), but the integration/federation repository is marked not yet implemented.",why:"Even Simpl-to-Simpl federation does not exist yet."},
- {id:"g-tier2",p:"gaps",gap:1,label:"Simpl: machine identity not on DCP",L:["T","O"],s:"v",what:"Simpl's self-sovereign identity plan (ADR 007, walt.id) covers human login only. Connectors still authenticate with X.509, mTLS and an ephemeral proof.",why:"Framework-bound identity blocks federation with non-Simpl spaces. The lab shows the full DCP path working on Simpl's connector (increments E and E3)."},
+ {id:"g-tier2",p:"gaps",gap:1,label:"Simpl: machine identity not on DCP",L:["T","O"],s:"v",what:"Simpl's self-sovereign identity plan (ADR 007, walt.id) covers human login only. Connectors still authenticate with X.509, mTLS and an ephemeral proof. The DS4SSCC pilots were advised that DCP was out of scope, so DECIDe deferred machine identity too.",why:"Framework-bound identity blocks federation with non-Simpl spaces. The lab shows the full DCP path working on Simpl's connector (increments E and E3)."},
  {id:"g-pull",p:"gaps",gap:1,label:"Simpl: consumer pull (EDR) not enabled",L:["T"],s:"v",what:"Simpl's basic connector ships HttpData transfers but not consumer-pull endpoint data references.",why:"Pull access is how most external data spaces expose data."},
  {id:"g-path",p:"gaps",label:"Simpl's contribution path",L:["X"],s:"p",what:"Frame federation as conformance to Data Act Art. 33 and EN 18235, expressed in EIF layers. Assemble it from EU building blocks and EDC. Contribute the fidelity contract and the federation descriptor to JTC 25, DSSC or the Eclipse Dataspace Working Group.",why:"Compose, don't build: the EIF reusability principle applied to Simpl."},
 
@@ -329,7 +356,14 @@ const N=[
  {id:"dsr-simpl",p:"dsr",gap:1,label:"Simpl support is thin",L:["T"],s:"v",src:["dsrCode"],what:"A simpl connector type exists, but verification only pings a control endpoint (capability simpl-api), contract definitions fall back to the EDC adapter, and catalogue management raises UnsupportedConnectorError for both edc and simpl. There is no Simpl identity or onboarding path.",why:"A Simpl connector on EDC 0.11 with DCP (lab D and E) matches what the EDC adapter drives. That path is plausible but untested."},
  {id:"iris360",p:"prac",label:"iris360 Data Space",L:["T"],s:"v",src:["iris360","sedia"],what:"Libelium's commercial data-space offer around its iris360 IoT platform, presented as a gateway to European data spaces. Libelium also leads SEDIA-funded data-space deployments in Spain.",why:"Where Data Space Ready meets real customers."},
  {id:"nexmo",p:"prac",label:"NEXMO mobility data space",tag:"UC3M · MovEDIHub · SEDIA funding",L:["T","O"],s:"v",src:["nexmoF","nexmoE","nexmoC"],what:"Public press only: a mobility data space run by Universidad Carlos III de Madrid as a neutral operator, in the MovEDIHub project with Next Generation EU funding via SEDIA. Orange and Libelium deployed the infrastructure with Eclipse EDC connectors. Owners set who may use which data for what purpose, and can revoke it. First use case: predicting loading-zone occupancy for last-mile delivery. The press also notes that participants and available datasets were not yet disclosed at launch.",why:"An EDC data space outside Simpl, with its infrastructure in place, and a natural first peer for Simpl federation. The press itself notes the hard part is getting parties to share, not the connector."},
- {id:"ds4sscc",p:"prac",label:"DS4SSCC-DEP · Geo4Water",L:["O"],s:"v",src:["ds4sscc"],what:"Smart-community data space deployment pilots. Geo4Water is one pilot; Libelium is a partner.",why:"The smart-city context in which Libelium also works with Simpl."},
+ {id:"decide",p:"prac",label:"DECIDe decisions data space",tag:"DS4SSCC-DEP pilot · Ghent, Freiburg, Bamberg · May 2025 – Aug 2026",L:["S","O","T"],s:"v",src:["decideDs","decideCode","uiDecide"],
+  what:"Data Driven Exploration in Contextual Information on Decisions: a cross-border data space for council decisions and legislation as ELI linked data. Partners include the Flemish Agency for Home Affairs (lblod, semantic.works stack), [ui!] Urban Software Institute, the University of Jena and Kehl University of Applied Sciences. Harvests Lokaal Beslist, OParl and PDFs, enriches them with AI and human validation, and serves them through SPARQL. Open code; the write-ups are unusually candid.",
+  why:"A working EU pilot that met every federation question head-on: catalogue federation, multi-issuer trust, DSP, and a connector between two national systems."},
+ {id:"decide-fed",p:"decide",label:"DCAT federation over LDES",L:["S"],s:"v",src:["decideDcat"],what:"Each city publishes its own DCAT catalogue as an LDES feed. A federating catalogue follows the feeds and replicates the metadata, never the data, including the ODRL policies and SHACL shapes attached to each dataset. The CKAN-based federation proof of concept suggested by DS4SSCC coaches was rejected because it cannot carry SHACL or ODRL.",why:"Catalogue federation (L1) that keeps access rules and structure next to the metadata."},
+ {id:"decide-vc",p:"decide",label:"Multi-issuer OID4VC trust",L:["O"],s:"v",src:["decideVc","decideVcCode"],what:"OID4VCI and OID4VP with SD-JWT credentials; did:web for organisations, did:key for people. Each side runs its own issuer ([ui!] for the German cities) and verifiers keep a trusted-issuers list. Human-to-machine only: DCP was planned for machines but deferred after DS4SSCC coaches said it was not among the recommended standards.",why:"A small, working version of a multi-issuer trust registry, for people only."},
+ {id:"decide-dsp",p:"decide",gap:1,label:"DSP 2025-1 analysed, not adopted",L:["T","L"],s:"v",src:["decideDsp"],what:"After a partial Catalog Protocol implementation, the team decided not to adopt DSP because it sets no mandatory lower bound: callback address formats cannot be discovered, transfer wire protocols are open, negotiation acceptance logic and reason-giving are out of scope, and token types are unspecified.",why:"Each of the four gaps is something a federation descriptor would fix per federation, and DCP fixes the token question."},
+ {id:"decide-conn",p:"decide",gap:1,label:"[ui!] connector: proxy on the data plane",L:["T","O"],s:"v",src:["uiArch","decideDsp","decideWrap"],what:"A component of the [ui!] DECIDE Dataspace App (React frontend, Quarkus and PostgreSQL backend), in production since July 2026. A city employee presents a wallet credential (OID4VP) to buy a licence; [ui!]'s verifier checks issuer, signature and licence level. The connector then reads the Flemish licence-gated SPARQL endpoint with a backend-held bearer key and a dsp-role header carrying the licence level, which the lblod wrapper trusts completely. No public code; DSP version undocumented; the write-up notes ODRL signing and enforcement for the purchase are not yet implemented.",why:"Identity-preserving for people, proxy for data: the provider cannot verify who holds the licence. Lab E3 shows the alternative, where the provider verifies the credential in every DSP request itself."},
+ {id:"ds4sscc",p:"prac",label:"DS4SSCC-DEP pilots",L:["O"],s:"v",src:["ds4sscc","decideDs"],what:"Smart-community data space deployment pilots, including Geo4Water (Libelium is a partner) and DECIDe (Ghent, Freiburg, Bamberg).",why:"The smart-city context in which Libelium also works with Simpl."},
 
  // ---------------- left side
  {id:"fw",p:"root",side:-1,c:"--b-fw",label:"Frameworks",L:["X"],s:"v",what:"Conceptual frameworks and reference architectures. They say what to reconcile and by what principles, but ship no runtime.",why:"The frame the Commission audience already uses."},
@@ -342,6 +376,7 @@ const N=[
  {id:"eira",p:"fw",label:"EIRA v6.1",tag:"v6.0 May 2023 · v6.1 May 2024",L:["X"],s:"v",src:["eira","eiraRN"],what:"The EIF's reference architecture as ArchiMate building blocks, with the CarTool plugin for the Archi tool. The 6.x releases added a focus on data spaces to cover their technical implementation.",why:"The notation Commission architects expect. The framework can be expressed as EIRA building blocks."},
  {id:"dssc",p:"fw",label:"DSSC Blueprint v2.0",tag:"March 2025",L:["X"],s:"v",src:["dssc","dsscMM"],what:"The Data Spaces Support Centre blueprint: business, governance and technical building blocks, an interoperability-by-design principle, cross-data-space interoperability considerations, and a Maturity Model (2025).",why:"Says what data spaces should converge on. It ships no runtime."},
  {id:"eoscif",p:"fw",label:"EOSC Interoperability Framework",tag:"2021",L:["X"],s:"v",src:["eoscif"],what:"EIF's four layers applied to research: protocols, metadata models, recommendations and agreements.",why:"EOSC is one of the four bridge scenarios, and its framework already speaks EIF."},
+ {id:"coedsc",p:"fw",label:"CoE-DSC common carrier layer",tag:"TNO-coordinated · 2024 and 2025 papers",L:["O","T"],s:"v",src:["coedscFed","coedscCcl"],what:"The Dutch Centre of Excellence for Data Sharing and Cloud proposes that participants establish trusted bilateral relationships dynamically, across community and data-space boundaries, with one point of entry and membership. DSP is expected to carry the legal and technical capabilities. Read from the public summaries.",why:"The closest published thinking to our proposal, and the same critique of pairwise community agreements that ADR 008 raises for Simpl."},
  {id:"dsba",p:"fw",label:"DSBA technical convergence",L:["T","S"],s:"v",src:["dsba"],what:"Gaia-X, IDSA, FIWARE and BDVA aligning on DSP, Verifiable Credentials with OpenID4VP, ODRL and DCAT.",why:"Industry agreement on the same pivots."},
 
  {id:"comp",p:"root",side:-1,c:"--b-comp",label:"Components",L:["T"],s:"v",what:"Connectors, identity hubs and trust services that data spaces actually run.",why:"The runtime the framework plugs into."},
@@ -353,6 +388,17 @@ const N=[
  {id:"gaiax",p:"comp",label:"Gaia-X Trust Framework",L:["O"],s:"v",src:["gaiax"],what:"Rules, policies and compliance for participants and services, built on W3C Verifiable Credentials.",why:"One of the trust frameworks a registry must recognise."},
  {id:"ishare",p:"comp",label:"iSHARE · i4Trust",L:["O"],s:"k",what:"A trust framework from Dutch logistics. i4Trust combined it with FIWARE.",why:"Another framework a federation will meet."},
  {id:"catenax",p:"comp",label:"Catena-X · Tractus-X",L:["T","O"],s:"k",what:"The automotive data space, running EDC with DCP natively.",why:"Evidence that native DCP works at scale, within one data space."},
+
+ {id:"cmf",p:"root",side:-1,c:"--b-cmf",label:"Cloud & marketplace federation",L:["T","O"],s:"v",what:"Initiatives that federate cloud infrastructure or service marketplaces rather than data sharing itself.",why:"Layers below and beside data spaces that Simpl will meet, starting with its planned DOME connection."},
+ {id:"dome",p:"cmf",label:"DOME marketplace",tag:"Digital Europe · federated marketplaces",L:["T","O","S"],s:"v",src:["domeGuide","domeProj"],what:"A federation of marketplaces sharing one catalogue of cloud, edge and AI services, built on FIWARE components and aligned with Gaia-X.",why:"The marketplace layer Simpl has put on its roadmap."},
+ {id:"dome-tmf",p:"dome",label:"Access Node, TM Forum APIs",L:["T","S"],s:"v",src:["domeGuide"],what:"Each marketplace runs an Access Node exposing TMF620 catalogue, TMF622 ordering, TMF637 inventory and TMF678 billing over an NGSI-LD broker. Offerings replicate between marketplaces with ledger anchoring; billing tracks seller, seller operator, buyer and buyer operator.",why:"Catalogue federation by replication, with a commercial layer on top."},
+ {id:"dome-id",p:"dome",label:"did:elsi, LEAR, trusted issuers",L:["O"],s:"v",src:["domeGuide"],what:"Organisations are identified with did:elsi derived from eIDAS certificates, carry LEAR credentials, and are checked by a VCVerifier against a trusted issuers list.",why:"An eIDAS-anchored identity model a multi-framework registry would have to accept."},
+ {id:"simpl-dome",p:"cmf",label:"Simpl ↔ DOME catalogue link",L:["S","O"],s:"v",src:["simplCoffee"],what:"On Simpl's roadmap: DOME products in Simpl-Open catalogues and Simpl services in DOME, connecting federated catalogues while each ecosystem keeps its own governance. Separately, the Language Data Space is joining through a gateway-based proof of concept.",why:"Simpl's first real cross-ecosystem federation. It will have to translate between Gaia-X self-descriptions and TMF620 offerings."},
+ {id:"cispe",p:"cmf",label:"CISPE federated catalogue",L:["O"],s:"v",src:["cispeCat","cispeSov","domeCde"],what:"The association of European cloud infrastructure providers runs a federated cloud catalogue with Gaia-X labels and, since April 2026, a sovereign and resilient cloud services framework. Cloud Data Engine bridges it to DOME. CISPE is a Gaia-X founding member.",why:"Provider-side catalogue federation with trust labels."},
+ {id:"dawex",p:"cmf",label:"Dawex data exchange",L:["T","O"],s:"v",src:["dawexCons"],what:"A data exchange and marketplace platform. In DOME it connects its technology to the DOME portal under the Gaia-X Trust Framework, and in other projects it builds core services for federating data spaces. Co-proposer of the trusted data transaction work behind EN 18235.",why:"A vendor platform that federates at marketplace level and shapes the standard."},
+ {id:"decadex",p:"dawex",label:"DECADE-X aerospace & defence",L:["O"],s:"v",src:["decadex","dawexDx"],what:"Industry association launched in 2025 by Airbus, BoostAeroSpace, Collins Aerospace, Liebherr and Thales for 10,000+ companies. Decade-X France runs on Dawex; Aerospace-X is the German counterpart.",why:"A sector data space built as national hubs under one umbrella."},
+ {id:"fulcrum",p:"cmf",label:"FULCRUM cloud federation",L:["T"],s:"v",src:["fulcrum","fulcrumCode","cispeFul","engFul"],what:"Open-source federation of European cloud providers. Fulcrum Core (Go, OpenAPI) orchestrates and monitors resources across providers through agents. Founded by Italian SMEs including TOP-IX; CISPE invested €1 million (March 2025); Engineering joined through its IPCEI-CIS project AVANT (October 2025).",why:"Federates compute, not data. Relevant when Simpl services must run on pooled European cloud."},
+ {id:"ecofed",p:"cmf",label:"ECOFED",tag:"IPCEI-CIS · Netherlands · 2024–2027",L:["T"],s:"v",src:["ecofed","ecofedTz"],what:"TNO-led consortium (Info Support, i3D.net, BIT, AMS-IX) building federation middleware and open interfaces so workloads can move between cloud platforms such as OpenStack, OpenNebula and KVM.",why:"Cloud switching and portability: the infrastructure side of the Data Act."},
 
  {id:"ds2",p:"root",side:-1,c:"--b-ds2",label:"DS2 reference",tag:"DS2: DataSpace, DataShare 2.0",L:["X"],s:"v",src:["ds2p","ds2w"],what:"Horizon Europe project (2024–2027) with an Inter-sector Dataspace Toolkit. A September 2026 paper connects two agricultural data spaces through it. I could not confirm whether the code is open source.",why:"The closest existing end-to-end match to the framework."},
  {id:"ds2-idm",p:"ds2",label:"Identity module (IDM)",L:["O","T"],s:"v",src:["ds2p"],what:"Federated identities using DAPS profiles and Verifiable Credentials.",why:"Two identity worlds handled in one module."},
@@ -419,7 +465,28 @@ const X=[
  ["dsr-simpl","lab-e","connector-be on EDC 0.11 with DCP has the shape the EDC adapter drives (untested)."],
  ["nexmo","edc","NEXMO runs Eclipse EDC connectors, deployed by Orange and Libelium."],
  ["nexmo","g-l4","An independently governed EDC data space: a candidate first peer for native federation with Simpl."],
- ["ds4sscc","g-path","Smart-city pilots where Simpl and other stacks meet."]
+ ["ds4sscc","g-path","Smart-city pilots where Simpl and other stacks meet."],
+ ["ds4sscc","decide","DECIDe is one of the DS4SSCC deployment pilots."],
+ ["decide-dsp","g-fdesc","The four DSP gaps are what a federation descriptor would pin down."],
+ ["decide-conn","g-mode","A proxy in production: the provider trusts a licence level passed in a header."],
+ ["decide-conn","lab-e3","E3 carries a verified credential into every DSP request instead."],
+ ["decide-vc","trustreg","Each city its own issuer, each verifier its own trusted-issuers list."],
+ ["decide-vc","g-tier2","Human identity only; machine identity (DCP) deferred."],
+ ["decide-fed","dcatap","DCAT with ODRL and SHACL, federated through LDES feeds."],
+ ["decide","lab-sparql","SPARQL behind DCAT and ODRL: the shape of the lab's governed SPARQL product."],
+ ["coedsc","fdesc","Dynamic bilateral trust needs a machine-readable agreement per relationship."],
+ ["coedsc","dsp","DSP is expected to carry the legal and technical capabilities."],
+ ["dome-id","eidas","did:elsi identifiers are derived from eIDAS certificates."],
+ ["dome","fiware","Built on the same FIWARE components."],
+ ["dome-id","dsr-trust","Same stack: credential verifier plus trusted issuers list."],
+ ["simpl-dome","fidelity","Gaia-X self-descriptions to TMF620 offerings: a translation whose losses must be declared."],
+ ["cispe","gaiax","Gaia-X labels in the federated catalogue."],
+ ["cispe","fulcrum","CISPE funds Fulcrum's open-source core."],
+ ["dawex","en18235","Co-proposer of the trusted data transaction work."],
+ ["dawex","dome","Connects its data exchange to the DOME portal."],
+ ["ecofed","coedsc","Both coordinated from TNO."],
+ ["fulcrum","dact-cloud","Pooling providers serves the switching and interoperability duties."],
+ ["ecofed","dact-cloud","Workload portability is cloud switching in practice."]
 ];
 const LAYERS={L:["Legal","--legal"],O:["Organisational","--org"],S:["Semantic","--sem"],T:["Technical","--tech"],X:["All layers","--cross"]};
 const STATUS={v:"Checked against a source this session",k:"From background knowledge, not re-checked",l:"Proven in the lab on this branch",p:"Our design proposal"};
@@ -681,7 +748,7 @@ function renderGuide(){
   const G=document.getElementById("guide");
   G.innerHTML=`<div>
    <h2>Reading the map</h2>
-   <p>The centre asks one question. On the right: what binds and what already runs (law, standards, EU running code), the gaps, and deployments and orchestrators already in the field. On the left: frameworks, components, the DS2 reference, our proposal and the lab evidence. Dashed lines connect items across branches. Click any node for details and sources.</p>
+   <p>The centre asks one question. On the right: what binds and what already runs (law, standards, EU running code), the gaps, and deployments and orchestrators already in the field. On the left: frameworks, components, cloud and marketplace federation, the DS2 reference, our proposal and the lab evidence. Dashed lines connect items across branches. Click any node for details and sources.</p>
    <h3>Marker = how sure</h3>
    <div class="legend">
     ${statusGlyph("v")}<span>Checked against a source this session</span>

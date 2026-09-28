@@ -9,7 +9,8 @@ An interactive brain map of what bears on federating Simpl-Open with *any* data 
 - **Frameworks:** EIF, EIRA, the DSSC Blueprint and the EOSC Interoperability Framework.
 - **EU running code:** OOTS, the Interoperability Test Bed, eDelivery, DSS with the EU Trusted Lists, the EUDI verifier and piveau.
 - **Data-space components:** EDC, IdentityHub, XFSC/TRAIN and the FIWARE connector.
-- **Deployments and orchestrators:** Libelium's Data Space Ready (read from its source on code.europa.eu), iris360, the NEXMO mobility data space (public press only) and DS4SSCC-DEP.
+- **Deployments and orchestrators:** Libelium's Data Space Ready (read from its source on code.europa.eu), iris360, the NEXMO mobility data space (public press only), DS4SSCC-DEP and the DECIDe pilot (read from its code and write-ups, including the [ui!] connector).
+- **Cloud & marketplace federation:** DOME, the planned Simpl ↔ DOME catalogue link, CISPE, Dawex / DECADE-X, FULCRUM and ECOFED; plus the CoE-DSC common carrier layer under frameworks.
 - **The DS2 reference, our framework proposal, the open gaps, and the lab evidence from `iaa/dcp/`.**
 
 Each item is marked with how it was established:
