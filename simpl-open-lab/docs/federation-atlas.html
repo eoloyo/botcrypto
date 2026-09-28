@@ -268,7 +268,11 @@ const SRC={
   cispeFul:["CISPE: €1 million for Fulcrum (Mar 2025)","https://www.cispe.cloud/cispe-updates-its-cloud-sovereignty-principles-and-takes-action-with-e1-million-investment-in-open-source-to-deploy-distributed-cloud/"],
   engFul:["Engineering and Fulcrum (Oct 2025)","https://www.eng.it/en/news/press-releases/2025/10/engineering-e-fulcrum-insieme-per-realizzare-il-cloud-federato-europeo-multi-provider"],
   ecofed:["ECOFED launch","https://ecofed.eu/news/dutch-project-launches-to-help-cloud-users-have-freedom-of-choice"],
-  ecofedTz:["Techzine: ECOFED","https://www.techzine.eu/blogs/infrastructure/128950/ecofed-dutch-cloud-project-for-european-digital-sovereignty/"]
+  ecofedTz:["Techzine: ECOFED","https://www.techzine.eu/blogs/infrastructure/128950/ecofed-dutch-cloud-project-for-european-digital-sovereignty/"],
+  dtacogoDs:["DS4SSCC-DEP pilot: DT aCoGo","https://www.ds4sscc.eu/dtacogo"],
+  ds4ssccR3:["DS4SSCC-DEP round 3 pilots","https://www.ds4sscc.eu/pilotoverview-1"],
+  fiOup:["Future Insight: European dataspaces and DT-aCoGo","https://www.futureinsight.nl/post/european-dataspaces-the-future-of-secure-digital-infrastructure?lang=en"],
+  rdamOup:["Rotterdam: Open Urban Platform","https://www.rotterdam.nl/open-urban-platform-rotterdam"]
 };
 // s: v = checked this session · k = background knowledge · l = proven in lab · p = our proposal
 const N=[
@@ -363,7 +367,12 @@ const N=[
  {id:"decide-vc",p:"decide",label:"Multi-issuer OID4VC trust",L:["O"],s:"v",src:["decideVc","decideVcCode"],what:"OID4VCI and OID4VP with SD-JWT credentials; did:web for organisations, did:key for people. Each side runs its own issuer ([ui!] for the German cities) and verifiers keep a trusted-issuers list. Human-to-machine only: DCP was planned for machines but deferred after DS4SSCC coaches said it was not among the recommended standards.",why:"A small, working version of a multi-issuer trust registry, for people only."},
  {id:"decide-dsp",p:"decide",gap:1,label:"DSP 2025-1 analysed, not adopted",L:["T","L"],s:"v",src:["decideDsp"],what:"After a partial Catalog Protocol implementation, the team decided not to adopt DSP because it sets no mandatory lower bound: callback address formats cannot be discovered, transfer wire protocols are open, negotiation acceptance logic and reason-giving are out of scope, and token types are unspecified.",why:"Each of the four gaps is something a federation descriptor would fix per federation, and DCP fixes the token question."},
  {id:"decide-conn",p:"decide",gap:1,label:"[ui!] connector: proxy on the data plane",L:["T","O"],s:"v",src:["uiArch","decideDsp","decideWrap"],what:"A component of the [ui!] DECIDE Dataspace App (React frontend, Quarkus and PostgreSQL backend), in production since July 2026. A city employee presents a wallet credential (OID4VP) to buy a licence; [ui!]'s verifier checks issuer, signature and licence level. The connector then reads the Flemish licence-gated SPARQL endpoint with a backend-held bearer key and a dsp-role header carrying the licence level, which the lblod wrapper trusts completely. No public code; DSP version undocumented; the write-up notes ODRL signing and enforcement for the purchase are not yet implemented.",why:"Identity-preserving for people, proxy for data: the provider cannot verify who holds the licence. Lab E3 shows the alternative, where the provider verifies the credential in every DSP request itself."},
- {id:"ds4sscc",p:"prac",label:"DS4SSCC-DEP pilots",L:["O"],s:"v",src:["ds4sscc","decideDs"],what:"Smart-community data space deployment pilots, including Geo4Water (Libelium is a partner) and DECIDe (Ghent, Freiburg, Bamberg).",why:"The smart-city context in which Libelium also works with Simpl."},
+ {id:"dtacogo",p:"prac",label:"DT aCoGo digital twin data space",tag:"DS4SSCC-DEP pilot · 's-Hertogenbosch, Rotterdam, Tampere · May 2025 – Aug 2026",L:["T","S","O"],s:"v",src:["dtacogoDs","fiOup"],
+  what:"Digital Twin as a Common Good: three cities share closed data for urban digital twins through the Open Urban Platform, deployed as a full urban data space. Domains: predictive traffic and sustainable mobility, and weather, climate and extreme-weather data services. Motto: develop once, deploy anywhere.",
+  why:"A second round-3 pilot, this time Dutch–Finnish, and one that treats the data space as a utility for digital twins. Its connector and trust technology are not published."},
+ {id:"dtacogo-oup",p:"dtacogo",label:"Open Urban Platform (Future Insight)",L:["T","O"],s:"v",src:["rdamOup","fiOup"],what:"Rotterdam's platform, launched 15 January 2025, developed and operated by Future Insight and overseen by a governance board. In DT aCoGo, data stays at the source under open standards while the cities share closed data. The connector, protocol and identity model are not described publicly.",why:"Data at the source is the same principle as DSP-style sharing, but without published protocols it cannot yet be placed on the native or mediated scale."},
+ {id:"dtacogo-m2m",p:"dtacogo",label:"Model2Model + recipe cookbook",L:["S","O"],s:"v",src:["dtacogoDs"],what:"Tests climate, mobility, water and BIM models together through Model2Model calculations, shown in 2D, 3D and 4D. Deliverables are a recipe template and a cookbook for deploying the twin in other cities.",why:"Chaining models is semantic translation between layers, and a replication recipe is an informal federation descriptor."},
+ {id:"ds4sscc",p:"prac",label:"DS4SSCC-DEP pilots",L:["O"],s:"v",src:["ds4sscc","decideDs","ds4ssccR3"],what:"Smart-community data space deployment pilots. Round 3 has five: DT aCoGo, DS4LoReMa, IPPCP, DECIDe and Geo4Water (Libelium is a Geo4Water partner).",why:"The smart-city context in which Libelium also works with Simpl."},
 
  // ---------------- left side
  {id:"fw",p:"root",side:-1,c:"--b-fw",label:"Frameworks",L:["X"],s:"v",what:"Conceptual frameworks and reference architectures. They say what to reconcile and by what principles, but ship no runtime.",why:"The frame the Commission audience already uses."},
@@ -486,7 +495,11 @@ const X=[
  ["dawex","dome","Connects its data exchange to the DOME portal."],
  ["ecofed","coedsc","Both coordinated from TNO."],
  ["fulcrum","dact-cloud","Pooling providers serves the switching and interoperability duties."],
- ["ecofed","dact-cloud","Workload portability is cloud switching in practice."]
+ ["ecofed","dact-cloud","Workload portability is cloud switching in practice."],
+ ["ds4sscc","dtacogo","DT aCoGo is a round-3 DS4SSCC pilot."],
+ ["dtacogo-oup","decide-fed","Both keep data at the source and share access rather than copies."],
+ ["dtacogo-m2m","fidelity","Translating between models is a per-layer fidelity question."],
+ ["dtacogo","g-fdesc","A replication recipe is an informal federation descriptor."]
 ];
 const LAYERS={L:["Legal","--legal"],O:["Organisational","--org"],S:["Semantic","--sem"],T:["Technical","--tech"],X:["All layers","--cross"]};
 const STATUS={v:"Checked against a source this session",k:"From background knowledge, not re-checked",l:"Proven in the lab on this branch",p:"Our design proposal"};
