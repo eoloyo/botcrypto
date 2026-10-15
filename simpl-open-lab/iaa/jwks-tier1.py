@@ -8,7 +8,9 @@ from cryptography.hazmat.primitives import serialization
 import jwt  # PyJWT
 
 KID = "local-tier1"
-KEY_PEM = "/tmp/claude-0/-home-user-botcrypto/4a0d9b60-0ac8-5e05-a42d-82e53b1735bc/scratchpad/tier1-rsa.pem"
+LAB_ROOT = os.environ.get("LAB_ROOT", os.path.expanduser("~/simpl-open-lab-work"))
+os.makedirs(LAB_ROOT, exist_ok=True)
+KEY_PEM = os.path.join(LAB_ROOT, "tier1-rsa.pem")
 
 def load_or_make_key():
     if os.path.exists(KEY_PEM):

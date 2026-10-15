@@ -4,9 +4,9 @@
 # Echoes the participant UUID + credential id.
 set -e
 AP_PORT="$1"; ORG="$2"; ISAUTH="$3"
-SCR=/tmp/claude-0/-home-user-botcrypto/4a0d9b60-0ac8-5e05-a42d-82e53b1735bc/scratchpad
+HERE="$(cd "$(dirname "$0")" && pwd)"
 UUID=$(python3 -c "import uuid;print(uuid.uuid4())")
-TOK=$(python3 "$SCR/jwks-tier1.py" token "$UUID")
+TOK=$(python3 "$HERE/jwks-tier1.py" token "$UUID")
 AUTHZ="Authorization: Bearer $TOK"
 
 # 1) keypair

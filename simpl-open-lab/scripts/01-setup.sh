@@ -28,9 +28,10 @@ if [ ! -x "$LAB_ROOT/keycloak/bin/kc.sh" ]; then
   ln -sfn "$LAB_ROOT/keycloak-26.0.7" "$LAB_ROOT/keycloak"
 fi
 
-# ---- 4. build the lightweight EJBCA-compatible CA shim (Go, stdlib only) -----
+# ---- 4. build the lightweight EJBCA-compatible CA shim (Go) ------------------
 log "Building EJBCA-shim..."
-( cd "$REPO_LAB_DIR/ejbca-shim" && GOPROXY=off noproxy_env go build -o "$LAB_ROOT/ejbca-shim" . )
+# go.mod pins go 1.26 and golang.org/x/crypto, so allow the toolchain + module download.
+( cd "$REPO_LAB_DIR/ejbca-shim" && GOFLAGS=-mod=mod noproxy_env go build -o "$LAB_ROOT/ejbca-shim" . )
 
 # ---- 5. clone + build the Simpl-Open services we run -------------------------
 # repo path (under $GL) -> local dir name -> maven vs edc-runtime handled in build

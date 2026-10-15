@@ -27,7 +27,7 @@ from cryptography.hazmat.primitives import hashes
 HERE = os.path.dirname(os.path.abspath(__file__))
 JAR = os.environ.get("IH_JAR", f"{HERE}/../../src/identityhub/launcher/identityhub/build/libs/identity-hub.jar")
 EXT = os.environ.get("EXT_JAR", f"{HERE}/seed-extension/seed-extension.jar")
-SCRATCH = "/tmp/claude-0/-home-user-botcrypto/4a0d9b60-0ac8-5e05-a42d-82e53b1735bc/scratchpad"
+SCRATCH = os.environ.get("LAB_ROOT", os.path.expanduser("~/simpl-open-lab-work"))
 DID_PORT = 7100
 SCOPE = "org.eclipse.edc.vc.type:SimplDataspaceMembershipCredential:read"
 PROVIDER_DID = f"did:web:localhost%3A{DID_PORT}:simpl-provider"
