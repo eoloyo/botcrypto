@@ -2,7 +2,7 @@
 # Minimal OCSP responder for the local Simpl lab. Signs GOOD responses with the
 # shim CA key and echoes the request nonce in responseExtensions (which the Simpl
 # IAA OCSP client requires, and which x/crypto/ocsp cannot emit).
-import sys, glob
+import glob
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime, timezone, timedelta
 from cryptography import x509

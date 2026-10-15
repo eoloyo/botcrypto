@@ -11,3 +11,4 @@ src/
 
 # Redis dump written by redis-server at runtime
 *.rdb
+__pycache__/

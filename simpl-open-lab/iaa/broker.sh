@@ -41,8 +41,8 @@ start_redpanda(){
   [ -n "$RPK" ] || { log "rpk not on PATH — cannot start Redpanda"; return 1; }
   local args=(redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M
               --node-id 0 --check=false
-              --kafka-addr PLAINTEXT://0.0.0.0:$PORT
-              --advertise-kafka-addr PLAINTEXT://localhost:$PORT)
+              --kafka-addr "PLAINTEXT://0.0.0.0:$PORT"
+              --advertise-kafka-addr "PLAINTEXT://localhost:$PORT")
   [ -n "${REDPANDA_INSTALL_DIR:-}" ] && args+=(--install-dir "$REDPANDA_INSTALL_DIR")
   log "starting Redpanda (rpk $RPK)"
   setsid env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \

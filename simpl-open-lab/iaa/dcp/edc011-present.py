@@ -160,7 +160,7 @@ try:
         print("self-issued token (verifier DID + scoped access token), resolved the credential by")
         print("scope, and returned a Verifiable Presentation of the Simpl membership credential.")
     else:
-        print("   raw (first 600):", blob[:600])
+        print("   raw (first 600):", resp[:600])
         sys.exit(3)
 finally:
     try: os.killpg(os.getpgid(proc.pid), signal.SIGTERM)

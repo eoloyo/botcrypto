@@ -30,7 +30,7 @@ def b64u(n):
 def _x5c():
     from cryptography import x509
     from cryptography.x509.oid import NameOID
-    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.serialization import Encoding
     import datetime
     subj = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "simpl-tier1-oidc")])

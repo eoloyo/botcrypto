@@ -26,7 +26,7 @@ IAA="$LAB_ROOT/src"
 # clone + build the gateways if needed
 for g in tier1-gateway tier2-gateway; do
   [ -d "$IAA/$g/.git" ] || GIT_TERMINAL_PROMPT=0 git clone --depth 1 "$GL/development/iaa/$g.git" "$IAA/$g"
-  [ -f "$IAA/$g"/target/$g-*.jar ] || ( cd "$IAA/$g" && mvn -q -B -ntp -DskipTests \
+  compgen -G "$IAA/$g/target/$g-*.jar" >/dev/null || ( cd "$IAA/$g" && mvn -q -B -ntp -DskipTests \
       -Dspotless.check.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true package )
 done
 
