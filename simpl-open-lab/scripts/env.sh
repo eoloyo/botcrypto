@@ -42,6 +42,17 @@ export IDENTITY_PROVIDER_PORT=8103
 # Override BACKEND_BIND=0.0.0.0 only to deliberately reproduce the insecure setup.
 export BACKEND_BIND="${BACKEND_BIND:-127.0.0.1}"
 
+# ---- JVM startup tuning -----------------------------------------------------
+# The mesh boots ~7 Spring Boot services on a 4-core host; startup is CPU-bound,
+# so three booting at once stretch each from ~2s to ~40s (measured). These flags
+# cut the per-JVM startup CPU without changing behaviour — the lab boots once and
+# serves a handful of requests, so steady-state throughput is irrelevant:
+#   TieredStopAtLevel=1  stop JIT at C1 — don't fully optimise one-shot startup code
+#   UseSerialGC          one GC thread, not N parallel GC threads fighting for cores
+#   Xss512k / Xmx1g      cap stack + heap (avoids the default ¼-RAM max-heap sizing)
+# Override with SIMPL_JAVA_OPTS="" to reproduce the untuned baseline for comparison.
+export SIMPL_JAVA_OPTS="${SIMPL_JAVA_OPTS-"-XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xss512k -Xmx1g"}"
+
 # ---- toolchain checks -------------------------------------------------------
 export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"
 export PATH="/usr/lib/postgresql/16/bin:$PATH"
