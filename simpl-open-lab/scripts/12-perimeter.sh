@@ -57,12 +57,14 @@ print('down' if not scopes else 'all' if ('all' in scopes or 'other' in scopes) 
 PY
 }
 
-# ── ensure the mesh is up ──────────────────────────────────────────────────────────────
-if ! up "$SDT/status" || ! up "$CAT/self-descriptions" || [ "$(total)" -lt 1 ]; then
-  log "mesh not ready — running 07 to bring up the Tier-2 mesh + publish"
-  bash "$HERE/07-tier2-provider-publish.sh"
+# ── require the mesh to be up (do NOT auto-run the slow 07 — this is a fast gate) ───────
+if ! up "$SDT/status" || ! up "$CAT/self-descriptions"; then
+  log "mesh not up — run ./07-tier2-provider-publish.sh first, then re-run this test"; exit 1
 fi
 (exec 3<>/dev/tcp/127.0.0.1/8443) 2>/dev/null && exec 3>&- || { log "tier2-gateway (:8443) not up"; exit 1; }
+# An active self-description is needed only for the gateway-read assertions (C, E); A/B/D run
+# regardless. If none is published, C/E are skipped with a note rather than re-running 07.
+HAVE_SD=0; [ "$(total)" -ge 1 ] && HAVE_SD=1
 
 echo
 log "══ A. Backend microservices must be bound to loopback only (ClusterIP stand-in) ══"
@@ -104,7 +106,7 @@ if [ -n "$SDID" ]; then
     *)           bad "gateway admitted an un-credentialed read (HTTP $NEG) — mTLS not enforced";;
   esac
 else
-  bad "no self-description id available to probe the gateway"
+  log "  –    no active self-description published — skipped (publish via 07/10 to exercise)"
 fi
 
 echo
@@ -134,11 +136,13 @@ fi
 
 echo
 log "══ E. The credentialed path through the gateway still works ══"
-if up "$SDT/status" && [ -n "$SDID" ]; then
+if [ -n "$SDID" ]; then
   POS=$(curl -s -m 20 -o "$RUN/12-discover.json" -w '%{http_code}' "$SDT/v1/selfDescriptions/discover/$SDID" 2>/dev/null || echo 000)
   BL=$(wc -c < "$RUN/12-discover.json" 2>/dev/null || echo 0)
   if [ "$POS" = 200 ] && [ "$BL" -gt 2 ]; then ok "credential-backed read via gateway /fc succeeded (HTTP 200, ${BL}B)"
   else log "  –    credentialed read returned HTTP $POS (${BL}B) — may need a fresh ephemeral proof (run 10 first)"; fi
+else
+  log "  –    no active self-description published — skipped"
 fi
 
 echo
