@@ -137,14 +137,14 @@ JAVA_HOME=$JH bash "$REPO_LAB_DIR/iaa/inject-fc-abac-rule.sh" "$(jar "$GW")" CON
 # ── 3. boot the IAA mesh ──────────────────────────────────────────────────────────────
 # identity-provider (:8103, the participant registry the GA + SAP call internally)
 up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java -jar "$(jar "$IAA/identity-provider")" \
-  --spring.profiles.active=local --server.port=8103 \
+  --spring.profiles.active=local --server.port=8103 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/authority_identityprovider \
   --spring.datasource.username=authority_identityprovider --spring.datasource.password=authority_identityprovider \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --open-id-connect.certs-endpoint=http://localhost:9099/certs
 # authentication_provider — GA (:8105, authority) and provider (:8104, participant)
 apboot(){ bg env JAVA_HOME=$JH java -jar "$(jar "$IAA/authentication_provider")" \
-  --spring.profiles.active=$2 --server.port=$1 \
+  --spring.profiles.active=$2 --server.port=$1 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/$3 \
   --spring.datasource.username=postgres --spring.datasource.password=postgres \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
@@ -158,7 +158,7 @@ up http://localhost:8105/actuator/health || apboot 8105 local-authority authorit
 # avoid a fatal "Connection refused localhost:8443 / Application run failed" at boot.
 # SAP (:8102, GA ephemeral-proof needs it)
 up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH java -jar "$(jar "$IAA/security-attributes-provider")" \
-  --spring.profiles.active=local --server.port=8102 \
+  --spring.profiles.active=local --server.port=8102 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/authority_securityattributesprovider \
   --spring.datasource.username=postgres --spring.datasource.password=postgres \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
@@ -200,7 +200,7 @@ curl -s -o /dev/null -H "Authorization: Bearer $TOK" http://localhost:8104/tier1
 # ── 6. sd-tooling-be (the real publisher) pointed at the gateway ──────────────────────
 SDT="$LAB_ROOT/src/sd-tooling-be"
 up http://localhost:8090/status || bg env JAVA_HOME=$JH java -jar "$(jar "$SDT")" \
-  --server.port=8090 --web.mvc.bearer-token.required=false \
+  --server.port=8090 --server.address="$BACKEND_BIND" --web.mvc.bearer-token.required=false \
   --vc-issuer.api-key=localkey --vc-issuer.client-id=local-client --vc-issuer.service.url=http://localhost:9085/vcIssuerService \
   --authentication-provider.service.url=http://localhost:8104 \
   --federated-catalogue.tier2-gateway.url=https://localhost:8443 --federated-catalogue.tier2-gateway.path-prefix=/fc \

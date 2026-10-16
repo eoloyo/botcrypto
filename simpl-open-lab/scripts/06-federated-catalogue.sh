@@ -108,7 +108,7 @@ log "quality-scoring stub up on :$QS_PORT (returns a valid Tier-A MQR report)"
 if ! curl -s -o /dev/null "http://localhost:$CAT_PORT/self-descriptions" 2>/dev/null; then
   ( cd "$CAT" && noproxy_env SCHEMA_MANAGER_SUBSCRIPTION_ENABLED=false \
       nohup java -jar target/fc-service-server.jar \
-        --server.port=$CAT_PORT \
+        --server.port=$CAT_PORT --server.address="${BACKEND_BIND:-127.0.0.1}" \
         --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/catalogue \
         --spring.datasource.username=postgres --spring.datasource.password=postgres \
         --graphstore.uri=bolt://localhost:7687 \

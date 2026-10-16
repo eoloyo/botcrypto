@@ -32,6 +32,16 @@ export VALIDATION_PORT=8083
 export EDC_ADAPTER_PORT=8084
 export IDENTITY_PROVIDER_PORT=8103
 
+# ---- perimeter model --------------------------------------------------------
+# Intended architecture: only the Tier-2 gateway faces the network; every backend
+# service is a ClusterIP behind it (tier2-gateway/README.md: "Mediates the traffic
+# from the Internet to the tier 2 agent components"). In this single-host lab we
+# approximate that by binding every backend HTTP listener to loopback, so the only
+# off-host-reachable port is the gateway (:8443, left on its default 0.0.0.0). This
+# makes the lab's exposure match production and is asserted by 12-perimeter.sh.
+# Override BACKEND_BIND=0.0.0.0 only to deliberately reproduce the insecure setup.
+export BACKEND_BIND="${BACKEND_BIND:-127.0.0.1}"
+
 # ---- toolchain checks -------------------------------------------------------
 export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"
 export PATH="/usr/lib/postgresql/16/bin:$PATH"
