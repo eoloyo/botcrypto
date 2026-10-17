@@ -11,8 +11,12 @@
 # Spring AOT fixes the active profiles and the @Profile / @Conditional bean set at build time, so
 # each image is built for the profile the lab runs it with; the authentication provider runs as
 # the authority (GA) and as a participant, which have different beans, so it gets two images.
-# The IAA services register BouncyCastle in main(); a native image must register (and verify)
-# security providers at build time, hence -H:AdditionalSecurityProviders for those images.
+# The IAA services register BouncyCastle in main(). A native image only accepts provider instances
+# it verified at build time, so BouncyCastle is listed in the build-time security configuration
+# (security.provider.13): the image then contains that instance, main()'s addProvider is a no-op
+# ("BC" already installed) and Security.getProvider("BC") returns the verified provider. Its classes
+# are initialized at build time, except the two DRBG holders, whose SecureRandom must be seeded at run
+# time (native-image refuses to build when a seeded Random ends up in the image).
 # One build peaks at ~8-9 GB RSS and ~4 CPU-minutes x 4 cores: images are built one at a time.
 source "$(dirname "$0")/env.sh"; set +e
 SRC="$LAB_ROOT/src"; LOGS="$NATIVE_DIR/logs"; mkdir -p "$NATIVE_DIR/bin" "$LOGS"
@@ -26,14 +30,15 @@ fi
 # properties those beans need must exist then. They only satisfy that build-time instantiation:
 # at runtime the values come from the launch command, as on the JVM.
 SPECS=(
-  "identity-provider|identity-provider|local||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
-  "auth-provider-local-authority|authentication_provider|local-authority||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
-  "auth-provider-local-consumer|authentication_provider|local-consumer||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
-  "security-attributes-provider|security-attributes-provider|local||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
-  "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081|--initialize-at-run-time=io.netty -H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
+  "identity-provider|identity-provider|local||-Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
+  "auth-provider-local-authority|authentication_provider|local-authority||-Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
+  "auth-provider-local-consumer|authentication_provider|local-consumer||-Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
+  "security-attributes-provider|security-attributes-provider|local||-Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
+  "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081|--initialize-at-run-time=io.netty -Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
   "sd-tooling-be|sd-tooling-be|default|"
   "fc-service|catalogue-be|default||--initialize-at-run-time=io.netty"
 )
+printf 'security.provider.13=org.bouncycastle.jce.provider.BouncyCastleProvider\n' > "$NATIVE_DIR/bouncycastle.security"
 want=("$@")
 gmvn(){ env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \
   JAVA_HOME="$GRAALVM_HOME" GRAALVM_HOME="$GRAALVM_HOME" PATH="$GRAALVM_HOME/bin:$PATH" \
