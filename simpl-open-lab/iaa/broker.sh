@@ -23,11 +23,17 @@ waitport(){ for _ in $(seq 1 40); do up && return 0; sleep 2; done; return 1; }
 
 # Redpanda topics == the Simpl topic constants (eu.europa.ec.simpl.common.constants.Topics),
 # with the default (empty) simpl.kafka.topic.prefix.
-TOPICS=(
-  "eu.europa.ec.simpl.authenticationprovider.events.credential.updated"
-  "eu.europa.ec.simpl.authenticationprovider.events.identity-attributes.updated"
-  "score-request"
-)
+# Each agent's services run with a per-agent topic prefix (simpl.kafka.topic.prefix in the
+# Spring profiles): iaa.iaa-local-authority. for the GA's auth-provider + gateway, and
+# iaa.iaa-local-consumer. for the participant — events stay inside one agent, as in prod.
+TOPICS=()
+for pfx in "" "iaa.iaa-local-authority." "iaa.iaa-local-consumer."; do
+  TOPICS+=("${pfx}eu.europa.ec.simpl.authenticationprovider.events.credential.updated"
+           "${pfx}eu.europa.ec.simpl.authenticationprovider.events.identity-attributes.updated")
+done
+TOPICS+=("score-request")
+# keep the broker JVM small on the 4-core lab host (override by exporting KAFKA_HEAP_OPTS)
+export KAFKA_HEAP_OPTS="${KAFKA_HEAP_OPTS:--Xmx512m -Xms256m}"
 
 if up; then log "broker already up on :$PORT"; exit 0; fi
 

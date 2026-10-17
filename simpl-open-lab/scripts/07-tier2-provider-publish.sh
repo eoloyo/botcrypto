@@ -68,6 +68,13 @@ up http://localhost:30081/ocsp   || bg python3 "$REPO_LAB_DIR/iaa/ocsp-responder
 up http://localhost:8085         || bg python3 "$REPO_LAB_DIR/catalogue/qs-stub.py"
 # Neo4j (auth disabled + n10s) is brought up by 06-federated-catalogue.sh below.
 log "infra up (Postgres, Redis, CA shim, JWKS, OCSP, quality-scoring)"
+# Optional event backbone. Simpl's IAA services publish credential/identity-attribute events
+# to Kafka (spring default bootstrap localhost:9092); without a broker those events are lost
+# and the lab compensates (gateway restart, manual proof-cache clearing). SIMPL_BROKER=kafka
+# (or redpanda|auto) starts a broker first so the events flow as in production.
+if [ -n "${SIMPL_BROKER:-}" ]; then
+  SIMPL_BROKER="$SIMPL_BROKER" bash "$REPO_LAB_DIR/iaa/broker.sh" || { log "broker failed to start"; exit 1; }
+fi
 
 # ── 1. fc-service (catalogue) with schemas + named DataSchema ─────────────────────────
 bash "$(dirname "$0")/06-federated-catalogue.sh" >/dev/null 2>&1 || true
