@@ -47,7 +47,7 @@ SPECS=(
   "security-attributes-provider|security-attributes-provider|local||-Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
   "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081|--initialize-at-run-time=io.netty -Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
   "sd-tooling-be|sd-tooling-be|default|"
-  "fc-service|catalogue-be|default||--initialize-at-run-time=io.netty -H:IncludeResources=liquibase/.* -H:IncludeResources=defaultschema/.* -H:IncludeResources=contracts/.* -H:IncludeResources=static/.* -H:IncludeResources=dummy/.* -H:IncludeResources=event[.]json"
+  "fc-service|catalogue-be|default||--initialize-at-run-time=io.netty -H:+AddAllCharsets -H:IncludeResources=liquibase/.* -H:IncludeResources=defaultschema/.* -H:IncludeResources=contracts/.* -H:IncludeResources=static/.* -H:IncludeResources=dummy/.* -H:IncludeResources=event[.]json"
 )
 printf 'security.provider.13=org.bouncycastle.jce.provider.BouncyCastleProvider\n' > "$NATIVE_DIR/bouncycastle.security"
 want=("$@")
