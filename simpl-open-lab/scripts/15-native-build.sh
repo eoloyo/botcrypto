@@ -8,14 +8,12 @@
 #   ./99-stop.sh --wipe && SIMPL_RUNTIME=agent ./07-tier2-provider-publish.sh && ./12-perimeter.sh
 # (add the broker / 13 pass to cover the Kafka paths). The result accumulates in $NATIVE_DIR/agent.
 #
-# STATUS (2026-10-17): all 7 images build. With SIMPL_RUNTIME=native the six IAA/publisher
-# services boot (0.6-2.7 s each vs 4.8-11.5 s on the JVM; ~half the anonymous memory) and both
-# enrolments succeed. Two open issues, so the default stays SIMPL_RUNTIME=jvm:
-#   - sd-tooling-be: the gated publish returns 500 — NPE in OkHttpAuthenticationProviderAdapter.
-#     getPrivateKey building the Tier-2 mTLS client (likely reflection/serialization of the
-#     key exchange with the participant auth-provider; not yet diagnosed).
-#   - fc-service: starts with SLF4J's NOP provider ("LoggerFactory is not a Logback
-#     LoggerContext"); move its binary aside to run it on the JVM fallback.
+# STATUS (2026-10-17): all 7 images build and the fully native mesh passes the whole lab:
+# 07 publish through the Tier-2 mTLS mesh, 12-perimeter 11/11, 10-gated-discovery, and with
+# SIMPL_BROKER=kafka 13-kafka-events 5/5. Measured (14-footprint.sh, cold boot + publish):
+#   cold boot 24 s vs 43 s JVM; CPU 11 s vs 65 s; anonymous memory 1.1 GB vs 2.2 GB; RSS 2.25 vs 2.47 GB
+#   (half of a native process's RSS is its mapped executable). Each service ready in 0.6-2.0 s.
+# Cost: ~75 min and ~10 GB peak RAM to build all images, against ~3 min for the jars.
 #
 # Spring AOT fixes the active profiles and the @Profile / @Conditional bean set at build time, so
 # each image is built for the profile the lab runs it with; the authentication provider runs as

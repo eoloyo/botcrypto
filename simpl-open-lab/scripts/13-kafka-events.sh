@@ -54,7 +54,7 @@ else bad "no identity-attributes event on the participant topic"; fi
 
 echo
 log "══ D. a new GA credential reaches the running gateway as an event (no restart) ══"
-GWPID=$(pgrep -f "tier2-gateway.*local\.jar" | head -1 || true)
+GWPID=$(pgrep -f "tier2-gateway.*local\.jar|$NATIVE_DIR/bin/tier2-gateway" | head -1 || true)
 [ -n "$GWPID" ] || { bad "gateway not running"; GWPID=none; }
 MARK=$(wc -l < "$MESH")
 bash "$HERE/../iaa/enroll.sh" 8105 "Local Authority" true | tail -1 | grep -oE "install [0-9]+" | sed 's/^/   GA /'
@@ -63,7 +63,7 @@ for _ in $(seq 1 20); do
   tail -n +"$((MARK+1))" "$MESH" | grep -q "Received credential updated event, invalidating credential cache" && { GOT=1; break; }
   sleep 1
 done
-NOWPID=$(pgrep -f "tier2-gateway.*local\.jar" | head -1 || true)
+NOWPID=$(pgrep -f "tier2-gateway.*local\.jar|$NATIVE_DIR/bin/tier2-gateway" | head -1 || true)
 [ "$GOT" = 1 ] && ok "gateway logged 'Received credential updated event, invalidating credential cache'" \
                || bad "gateway did not receive the credential-updated event within 20s"
 [ "$GWPID" = "$NOWPID" ] && ok "gateway kept running through the identity change (PID $GWPID, no restart)" \
