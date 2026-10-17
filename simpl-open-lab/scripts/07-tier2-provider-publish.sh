@@ -154,14 +154,14 @@ JAVA_HOME=$JH bash "$REPO_LAB_DIR/iaa/inject-fc-abac-rule.sh" "$(jar "$GW")" CON
   || log "WARN: could not inject the /fc ABAC rule into the gateway jar"
 # ── 3. boot the IAA mesh ──────────────────────────────────────────────────────────────
 # identity-provider (:8103, the participant registry the GA + SAP call internally)
-up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$IAA/identity-provider")" \
+up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar identity-provider "$(jar "$IAA/identity-provider")") \
   --spring.profiles.active=local --server.port=8103 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/authority_identityprovider \
   --spring.datasource.username=authority_identityprovider --spring.datasource.password=authority_identityprovider \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --open-id-connect.certs-endpoint=http://localhost:9099/certs
 # authentication_provider — GA (:8105, authority) and provider (:8104, participant)
-apboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$IAA/authentication_provider")" \
+apboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar "auth-provider-$1" "$(jar "$IAA/authentication_provider")") \
   --spring.profiles.active=$2 --server.port=$1 --server.address="$BACKEND_BIND" \
   --spring.kafka.producer.properties.max.block.ms=1500 $KAFKA_ARGS \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/$3 \
@@ -176,7 +176,7 @@ up http://localhost:8105/actuator/health || apboot 8105 local-authority authorit
 # (it needs the GA credentialed first), so :8104 is booted THERE, after the gateway, to
 # avoid a fatal "Connection refused localhost:8443 / Application run failed" at boot.
 # SAP (:8102, GA ephemeral-proof needs it)
-up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$IAA/security-attributes-provider")" \
+up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar security-attributes-provider "$(jar "$IAA/security-attributes-provider")") \
   --spring.profiles.active=local --server.port=8102 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/authority_securityattributesprovider \
   --spring.datasource.username=postgres --spring.datasource.password=postgres \
@@ -189,7 +189,7 @@ log "IAA authority side up (identity-provider, GA auth_provider, SAP)"
 # ── 4. enroll the AUTHORITY (root of trust) then boot the gateway with its identity ───
 bash "$REPO_LAB_DIR/iaa/enroll.sh" 8105 "Local Authority" true  | tail -1
 GWJAR="$(jar "$GW")"
-gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$GWJAR" --spring.profiles.active=local-authority --server.port=8443 \
+gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar tier2-gateway "$GWJAR") --spring.profiles.active=local-authority --server.port=8443 \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --sap.url=http://localhost:8102 --identity-provider.url=http://localhost:8103 \
   --authentication-provider.url=http://localhost:8105 --users-roles.url=http://localhost:8106 \
@@ -216,7 +216,7 @@ waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
 # sd-tooling-be (the real publisher) talks to the gateway and the participant auth-provider
 # only when it publishes, so boot it now — in parallel with :8104 and the provider enrolment.
 SDT="$LAB_ROOT/src/sd-tooling-be"
-up http://localhost:8090/status || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$SDT")" \
+up http://localhost:8090/status || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar sd-tooling-be "$(jar "$SDT")") \
   --server.port=8090 --server.address="$BACKEND_BIND" --web.mvc.bearer-token.required=false \
   --vc-issuer.api-key=localkey --vc-issuer.client-id=local-client --vc-issuer.service.url=http://localhost:9085/vcIssuerService \
   --authentication-provider.service.url=http://localhost:8104 \

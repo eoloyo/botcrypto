@@ -107,7 +107,7 @@ log "quality-scoring stub up on :$QS_PORT (returns a valid Tier-A MQR report)"
 # ---- 5. boot the catalogue pointing at the local stub + graph store ----------
 if ! curl -s -o /dev/null "http://localhost:$CAT_PORT/self-descriptions" 2>/dev/null; then
   ( cd "$CAT" && noproxy_env SCHEMA_MANAGER_SUBSCRIPTION_ENABLED=false \
-      nohup java $SIMPL_JAVA_OPTS -jar target/fc-service-server.jar \
+      nohup java $SIMPL_JAVA_OPTS $(bootjar fc-service "$CAT/target/fc-service-server.jar") \
         --server.port=$CAT_PORT --server.address="${BACKEND_BIND:-127.0.0.1}" \
         --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/catalogue \
         --spring.datasource.username=postgres --spring.datasource.password=postgres \

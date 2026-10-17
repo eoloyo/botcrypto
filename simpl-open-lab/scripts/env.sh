@@ -67,6 +67,32 @@ export -f noproxy_env
 
 log() { echo -e "\033[1;34m[lab]\033[0m $*"; }
 
+# ---- Spring Boot startup: extracted jar + CDS archive ------------------------
+# Measured on security-attributes-provider started alone: packed fat jar ~26s, extracted jar
+# ~13s, extracted + CDS archive ~7s. Spring Boot's nested-jar launcher spends half the startup
+# loading classes out of the jars inside the fat jar; Class Data Sharing then skips most of the
+# remaining class loading. bootjar <instance> <fat-jar> prints the java arguments to launch it:
+#   - extracts the fat jar once (Spring Boot >= 3.3 `-Djarmode=tools extract`) and again
+#     whenever the jar is newer (rebuilt or re-patched);
+#   - -XX:+AutoCreateSharedArchive: the JVM uses $CDS_DIR/<instance>.jsa when it matches and
+#     (re)writes it at exit — a normal 99-stop (SIGTERM) is enough. The first boot after a
+#     (re)build pays the full cost; later boots, including --wipe cold boots, are fast.
+# SIMPL_CDS=0 launches the fat jars directly, as before.
+export SIMPL_CDS="${SIMPL_CDS:-1}"
+export CDS_DIR="$LAB_ROOT/cds"
+bootjar(){
+  local name="$1" jar="$2"
+  if [ "$SIMPL_CDS" != 1 ]; then echo "-jar $jar"; return; fi
+  local d="$CDS_DIR/x/$(basename "$jar" .jar)"
+  if [ ! -f "$d/.src" ] || [ "$jar" -nt "$d/.src" ]; then
+    rm -rf "$d"; mkdir -p "$CDS_DIR/x"
+    env -u JAVA_TOOL_OPTIONS "$JAVA_HOME/bin/java" -Djarmode=tools -jar "$jar" extract --destination "$d" \
+      >/dev/null 2>&1 || { echo "-jar $jar"; return; }
+    echo "$jar" > "$d/.src"
+  fi
+  echo "-XX:SharedArchiveFile=$CDS_DIR/$name.jsa -XX:+AutoCreateSharedArchive -jar $(ls "$d"/*.jar | head -1)"
+}
+
 # Wait until a URL answers (any HTTP status) or timeout.
 wait_http() { # wait_http URL [timeout_s]
   local url="$1" t="${2:-120}" n=0
