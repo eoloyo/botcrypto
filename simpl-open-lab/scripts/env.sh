@@ -110,9 +110,10 @@ export GRAALVM_HOME="${GRAALVM_HOME:-$LAB_ROOT/graalvm}"
 svc(){
   local cds="$1" jar="$2" name="$3"
   case "$SIMPL_RUNTIME" in
-    # in a native image classpath resources are resource: URLs, which Log4j does not load by default
+    # in a native image classpath resources are resource: URLs, which Log4j does not load by default;
+    # Lettuce (Redis) records JFR events, and JFR is not compiled into the images
     native) [ -x "$NATIVE_DIR/bin/$name" ] && \
-              { echo "$NATIVE_DIR/bin/$name -Dlog4j2.Configuration.allowedProtocols=resource,file,jar,https"; return; } ;;
+              { echo "$NATIVE_DIR/bin/$name -Dlog4j2.Configuration.allowedProtocols=resource,file,jar,https -Dio.lettuce.core.jfr=false"; return; } ;;
     agent)  mkdir -p "$NATIVE_DIR/agent/$name"
             echo "$GRAALVM_HOME/bin/java -agentlib:native-image-agent=config-merge-dir=$NATIVE_DIR/agent/$name $(bootjar "$cds" "$jar" | grep -o -- '-jar .*')"
             return ;;

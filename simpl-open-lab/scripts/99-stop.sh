@@ -29,6 +29,7 @@ pkill -f "kc.sh" 2>/dev/null || true
 pkill -f "fc-service-server.jar" 2>/dev/null || true
 pkill -f "$LAB_ROOT/src/.*\.jar" 2>/dev/null || true
 pkill -f "$CDS_DIR/x/" 2>/dev/null || true          # services launched from extracted jars (SIMPL_CDS)
+pkill -f "$NATIVE_DIR/bin/" 2>/dev/null || true      # GraalVM native executables (SIMPL_RUNTIME=native)
 pkill -f "python3 $REPO_LAB_DIR/" 2>/dev/null || true
 pkill -f "/var/lib/postgresql/neo4j" 2>/dev/null || true
 redis-cli -p 30379 -a admin shutdown nosave >/dev/null 2>&1 || true
@@ -37,7 +38,7 @@ pkill -f "redpanda start" 2>/dev/null || true       # SIMPL_BROKER=redpanda
 
 # The JVMs write their CDS archives on exit (AutoCreateSharedArchive); wait for them so a
 # following 07 neither races a half-written archive nor finds ports still bound.
-for _ in $(seq 1 60); do pgrep -f "$CDS_DIR/x/|$LAB_ROOT/src/.*\.jar|fc-service-server" >/dev/null 2>&1 || break; sleep 0.5; done
+for _ in $(seq 1 60); do pgrep -f "$CDS_DIR/x/|$LAB_ROOT/src/.*\.jar|fc-service-server|$NATIVE_DIR/bin/" >/dev/null 2>&1 || break; sleep 0.5; done
 
 if [ "$WIPE" = 1 ]; then
   # give the postgres/neo4j processes a moment to release their data dirs
