@@ -29,10 +29,18 @@ Payloads are **CloudEvents 1.0** JSON. Producers/consumers are standard `spring-
 With no broker, both flows are **substituted**:
 - Quality scoring is done **synchronously** by `catalogue/qs-stub.py` instead of via the
   `score-request` topic.
-- The credential-updated event simply **fails to publish** (the harmless "post-commit
-  KafkaException" in the logs — the credential still installs). Because the gateway never
-  receives the event, `07-tier2-provider-publish.sh` **restarts the gateway** so it re-reads
-  the GA identity, instead of the gateway hot-swapping its `CredentialCache` on the event.
+- The credential-updated event simply **fails to publish** (the "post-commit KafkaException"
+  in the logs). The credential is saved, but the install API answers **500** instead of 204.
+  Because the gateway never receives the event, `07-tier2-provider-publish.sh` **restarts a
+  running gateway** so it re-reads the GA identity, instead of the gateway invalidating its
+  `CredentialCache` on the event. (07 only does this when no broker is configured.)
+- The auth-provider's Kafka producer would block for its default `max.block.ms` (60 s) per
+  send before failing; 07 sets it to 1.5 s so the missing broker costs no time.
+
+Not a Kafka workaround: `10-gated-discovery.sh` clears the cached ephemeral proofs in Redis
+after changing an identity attribute. The proof is cached for its own lifetime and **no
+service consumes the identity-attributes event**, so even in production an attribute change
+takes effect only when the proof expires — the test forces that refresh in both modes.
 
 So the missing broker costs exactly the *event-driven* behavior: live gateway credential
 refresh and async score recomputation.
@@ -51,16 +59,22 @@ SIMPL_BROKER=redpanda bash iaa/broker.sh
 SIMPL_BROKER=kafka    bash iaa/broker.sh
 ```
 
-Then start the services pointed at it and drop the no-broker workarounds:
+In practice you don't run `broker.sh` by hand — `07` does it:
 
-| Service | Flags to add |
-|---|---|
-| `authentication_provider` (both profiles) | `--spring.kafka.bootstrap-servers=localhost:9092 --simpl.kafka.topic.prefix=` |
-| `tier2-gateway` | `--spring.kafka.bootstrap-servers=localhost:9092 --simpl.kafka.topic.prefix=` |
-| `catalogue-be` | `--spring.kafka.bootstrap-servers=localhost:9092` (and drop `--quality-scoring.url` stub if using the async scorer) |
+```bash
+./99-stop.sh --wipe && SIMPL_BROKER=kafka ./07-tier2-provider-publish.sh   # or redpanda|auto
+./13-kafka-events.sh                                                        # verifies the flows
+```
 
-With the broker live, the gateway consumes the credential-updated event and refreshes its
-cache **without the restart** `07` currently does.
+With `SIMPL_BROKER` set, `07` starts the broker before the IAA services and passes
+`--spring.kafka.bootstrap-servers=localhost:9092` to both auth-providers and the gateway
+(their local profiles disagree: the auth-provider's points at `:30092`, the gateway's at
+`:9092`). The per-agent topic prefixes from the Spring profiles are **kept** —
+`iaa.iaa-local-authority.` for the GA's auth-provider + gateway, `iaa.iaa-local-consumer.` for
+the participant — so events stay inside one agent, as in production; `broker.sh` creates the
+topics for both. A running gateway is then **not restarted**: it picks up a new GA identity
+from the credential-updated event. `catalogue-be` keeps the synchronous `qs-stub` scorer (the
+async quality-scoring service is not part of the lab).
 
 ## Verified in this environment
 
@@ -80,5 +94,8 @@ $ rpk … topic consume <topic> -n 1                  → the same event back at
 Redpanda's client + the Kafka wire protocol the Simpl services use interoperate on the exact
 topic the gateway listens to — so on any box where the Redpanda **broker** runs (a normal
 `rpk`/package install, or a container), `iaa/broker.sh` makes these event flows live with no
-code change. The live "gateway consumes the credential event without a restart" demo needs
-`authentication_provider` + `tier2-gateway` booted against the broker — the natural next step.
+code change. The live "gateway consumes the credential event without a restart" demo is
+`13-kafka-events.sh`: against a `SIMPL_BROKER=kafka` boot, a credential install returns 204,
+the event lands on the participant's own topic, and a new GA credential makes the *running*
+gateway log `Received credential updated event, invalidating credential cache` with an
+unchanged PID.

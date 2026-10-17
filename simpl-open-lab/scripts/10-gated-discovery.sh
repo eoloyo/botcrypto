@@ -70,6 +70,8 @@ log "target self-description id = $SDID"
 # helpers for the SAP-governed machine attribute + a forced proof refresh (used by the positive
 # read below and the authentic-ABAC toggle in step 6). CONSUMER is a non-assignable machine
 # attribute; the gateway /fc rule requires it (see iaa/inject-fc-abac-rule.sh).
+# The forced refresh is needed with or without a Kafka broker: proofs are cached in Redis for
+# their own lifetime and no service consumes the identity-attributes event.
 ATTR="CONSUMER"
 PUUID=$(cat /tmp/last-uuid.txt 2>/dev/null || true)
 SAPDB="authority_securityattributesprovider"

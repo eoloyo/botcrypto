@@ -190,9 +190,24 @@ gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$GWJAR" --spring.prof
   --sap.url=http://localhost:8102 --identity-provider.url=http://localhost:8103 \
   --authentication-provider.url=http://localhost:8105 --users-roles.url=http://localhost:8106 \
   --federated-catalogue.url=http://localhost:8081 --keypair.algorithm=EC $KAFKA_ARGS; }
-# (re)start the gateway so it fetches its server identity from the now-credentialed GA
-ps -eo pid,args | grep 'tier2-gateway-local.jar' | grep -v grep | awk '{print $1}' | xargs -r kill 2>/dev/null || true
-sleep 2; gwboot; waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
+# The gateway must serve with the identity the GA was just enrolled with.
+#  - not running (cold boot): start it, in either mode.
+#  - running + broker: leave it. The GA enrolment above published a credential-updated
+#    event; the gateway's @KafkaListener invalidates its CredentialCache and picks up the new
+#    identity live (verified by 13-kafka-events.sh) — no restart, as in production.
+#  - running + no broker: the event is lost, so restart it to make it re-read the identity.
+GWPID=$(pgrep -f "tier2-gateway.*local\.jar" | head -1 || true)
+if [ -z "$GWPID" ]; then
+  gwboot
+elif [ -n "${SIMPL_BROKER:-}" ]; then
+  log "tier2-gateway already running (PID $GWPID) — broker live, it refreshes its identity from the event (no restart)"
+else
+  log "no broker: restarting tier2-gateway (PID $GWPID) so it re-reads the GA identity"
+  kill "$GWPID" 2>/dev/null || true
+  for _ in $(seq 1 15); do kill -0 "$GWPID" 2>/dev/null || break; sleep 1; done
+  gwboot
+fi
+waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
 
 # now the gateway is up, boot the PARTICIPANT auth_provider (:8104) — it hard-depends on
 # the gateway at startup (client.authority.url=https://localhost:8443).
