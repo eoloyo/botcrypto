@@ -142,6 +142,13 @@ fi
 log "schemas loaded:"; curl -s "http://localhost:$CAT_PORT/schemas" | python3 -c \
   "import sys,json;d=json.load(sys.stdin);print('  ontologies:',len(d.get('ontologies',[])),'| shapes:',len(d.get('shapes',[])))" 2>/dev/null
 
+# CATALOGUE_ONLY=1 (used by 07): stop here — the catalogue is up with its schemas. 07 must
+# publish its self-description through the Tier-2 gateway; a direct POST to the backend
+# below would create the SD first and turn 07's gated publish into a 409 duplicate.
+if [ "${CATALOGUE_ONLY:-0}" = 1 ]; then
+  log "catalogue up with schemas (CATALOGUE_ONLY: no direct publish, no graph demo)"; exit 0
+fi
+
 # ---- 7. PUBLISH the Tier-A conformant Self-Description ------------------------
 log "POST /self-descriptions (Tier-A conformant SD)"
 RESP=$(curl -s -w '\n%{http_code}' -X POST "http://localhost:$CAT_PORT/self-descriptions" \

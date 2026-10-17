@@ -46,6 +46,7 @@ if [ "$WIPE" = 1 ]; then
   # Neo4j: delete only the graph data, keep the install (bin/conf/plugins) so no re-download.
   rm -rf /var/lib/postgresql/neo4j/data && log "wiped Neo4j graph data"
   rm -rf "$LAB_ROOT/kafka-logs" && log "wiped Kafka log dir (broker.sh re-formats it)"
+  rm -f "$RUN/07-publication.env"   # the SD it vouched for is gone with the catalogue DB
   # Redis has no persistence configured; stopping it above already cleared it. Remove any stray dump.
   rm -f "$LAB_ROOT"/dump.rdb /var/lib/postgresql/dump.rdb 2>/dev/null || true
   log "COLD state: next ./07-tier2-provider-publish.sh will initdb + migrate + re-enrol from scratch."

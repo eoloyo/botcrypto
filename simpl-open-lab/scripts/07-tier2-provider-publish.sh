@@ -80,9 +80,13 @@ if [ -n "${SIMPL_BROKER:-}" ]; then
 fi
 KAFKA_ARGS="${KAFKA_ARGS:-}"
 
-# ── 1. fc-service (catalogue) with schemas + named DataSchema ─────────────────────────
-bash "$(dirname "$0")/06-federated-catalogue.sh" >/dev/null 2>&1 || true
-waitup http://localhost:8081/self-descriptions 60 && log "fc-service up on :8081"
+# ── 1. fc-service (catalogue) with schemas + named DataSchema — in the BACKGROUND ─────────
+# Nothing before the final publish needs the catalogue, so it boots (Neo4j + fc-service +
+# schemas, ~25s) while the IAA services come up; step 7 waits for it. CATALOGUE_ONLY=1 keeps
+# 06 from publishing the demo SD directly to the backend, so the SD is created only by the
+# gated publish below.
+CATALOGUE_ONLY=1 bash "$(dirname "$0")/06-federated-catalogue.sh" > "$RUN/06-catalogue.log" 2>&1 &
+CATPID=$!
 
 # ── 2. apply the local patches, then build the IAA services ───────────────────────────
 GW="$IAA/tier2-gateway"
@@ -209,6 +213,16 @@ else
 fi
 waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
 
+# sd-tooling-be (the real publisher) talks to the gateway and the participant auth-provider
+# only when it publishes, so boot it now — in parallel with :8104 and the provider enrolment.
+SDT="$LAB_ROOT/src/sd-tooling-be"
+up http://localhost:8090/status || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$SDT")" \
+  --server.port=8090 --server.address="$BACKEND_BIND" --web.mvc.bearer-token.required=false \
+  --vc-issuer.api-key=localkey --vc-issuer.client-id=local-client --vc-issuer.service.url=http://localhost:9085/vcIssuerService \
+  --authentication-provider.service.url=http://localhost:8104 \
+  --federated-catalogue.tier2-gateway.url=https://localhost:8443 --federated-catalogue.tier2-gateway.path-prefix=/fc \
+  --otel.sdk.disabled=true
+
 # now the gateway is up, boot the PARTICIPANT auth_provider (:8104) — it hard-depends on
 # the gateway at startup (client.authority.url=https://localhost:8443).
 up http://localhost:8104/actuator/health || apboot 8104 local-consumer authprovider https://localhost:8443
@@ -227,22 +241,35 @@ bash "$REPO_LAB_DIR/iaa/seed-sap-attributes.sh" CONSUMER || log "WARN: SAP attri
 TOK=$(python3 "$REPO_LAB_DIR/iaa/jwks-tier1.py" token "$PUUID")
 curl -s -o /dev/null -H "Authorization: Bearer $TOK" http://localhost:8104/tier1/v2/ephemeralProof || true
 
-# ── 6. sd-tooling-be (the real publisher) pointed at the gateway ──────────────────────
-SDT="$LAB_ROOT/src/sd-tooling-be"
-up http://localhost:8090/status || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$SDT")" \
-  --server.port=8090 --server.address="$BACKEND_BIND" --web.mvc.bearer-token.required=false \
-  --vc-issuer.api-key=localkey --vc-issuer.client-id=local-client --vc-issuer.service.url=http://localhost:9085/vcIssuerService \
-  --authentication-provider.service.url=http://localhost:8104 \
-  --federated-catalogue.tier2-gateway.url=https://localhost:8443 --federated-catalogue.tier2-gateway.path-prefix=/fc \
-  --otel.sdk.disabled=true
+# ── 6. sd-tooling-be (the real publisher) — booted right after the gateway, see step 4 ──
 waitup http://localhost:8090/status 60 && log "sd-tooling-be up on :8090"
 
 # ── 7. PUBLISH through the mesh + verify ──────────────────────────────────────────────
 SD="$LAB_ROOT/src/catalogue-be/src/test/resources/mock-data/default-sd.json"
 [ -f "$SD" ] || SD="$REPO_LAB_DIR/catalogue/mock-data/default-sd.json"
-log "POST /v1/selfDescriptions/publications (through the Tier-2 mTLS mesh)"
-curl -s -w '\n  HTTP %{http_code}\n' -X POST http://localhost:8090/v1/selfDescriptions/publications \
-  -H "Content-Type: application/json" --data-binary @"$SD" | tail -2
+wait "$CATPID" || log "WARN: 06 (catalogue) exited non-zero — see $RUN/06-catalogue.log"
+waitup http://localhost:8081/self-descriptions 60 && log "fc-service up on :8081" \
+  || { log "fc-service not reachable on :8081 — see $RUN/06-catalogue.log"; exit 1; }
+active(){ curl -s -m 5 "http://localhost:8081/self-descriptions?statuses=ACTIVE" \
+  | python3 -c "import sys,json;print(json.load(sys.stdin).get('totalCount',0))" 2>/dev/null || echo 0; }
+REC="$RUN/07-publication.env"   # evidence that the SD was created through the gateway
+BEFORE=$(active)
+if [ "$BEFORE" -ge 1 ] && grep -q '^CODE=2' "$REC" 2>/dev/null; then
+  log "SD already published through the gateway by an earlier run ($REC) — not re-publishing"
+else
+  log "POST /v1/selfDescriptions/publications (through the Tier-2 mTLS mesh)"
+  RESP=$(curl -s -w '\n%{http_code}' -X POST http://localhost:8090/v1/selfDescriptions/publications \
+    -H "Content-Type: application/json" --data-binary @"$SD")
+  CODE=$(tail -1 <<<"$RESP"); AFTER=$(active)
+  log "  HTTP $CODE — active self-descriptions $BEFORE -> $AFTER"
+  case "$CODE" in
+    2??) [ "$AFTER" -gt "$BEFORE" ] || { log "publish returned $CODE but no new active SD"; exit 1; }
+         printf 'CODE=%s\nWHEN=%s\nVIA=sd-tooling-be -> tier2-gateway /fc -> fc-service\n' "$CODE" "$(date -u +%FT%TZ)" > "$REC" ;;
+    409) log "  409: the SD already exists but was NOT created through the gateway (direct backend publish?)"
+         sed '$d' <<<"$RESP" | head -c 400; echo; exit 1 ;;
+    *)   log "  gated publish failed"; sed '$d' <<<"$RESP" | head -c 400; echo; exit 1 ;;
+  esac
+fi
 log "fc-service self-descriptions:"; curl -s http://localhost:8081/self-descriptions | \
   python3 -c "import sys,json;d=json.load(sys.stdin);print('  totalCount:',d.get('totalCount'));[print('   ',i.get('meta',i).get('id'),i.get('meta',i).get('status')) for i in d.get('items',[])[:3]]" 2>/dev/null
 log "provider-agent publish through the full Tier-2 mTLS mesh — complete."

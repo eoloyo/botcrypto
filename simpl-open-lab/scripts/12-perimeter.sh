@@ -14,7 +14,8 @@
 # HTTP listener to loopback (BACKEND_BIND=127.0.0.1, see env.sh), leaving only the gateway
 # on all interfaces. This script ASSERTS that invariant plus the gateway's enforcement, so
 # a regression (a backend exposed on 0.0.0.0, or the gateway admitting an un-credentialed
-# read) fails the build instead of passing silently.
+# read, or a self-description that did not come through the gateway) fails the build
+# instead of passing silently.
 #
 # Run after the mesh is up (it runs 07 if not). Exits non-zero on any FAIL.
 set -euo pipefail
@@ -141,6 +142,22 @@ if [ -n "$SDID" ]; then
   BL=$(wc -c < "$RUN/12-discover.json" 2>/dev/null || echo 0)
   if [ "$POS" = 200 ] && [ "$BL" -gt 2 ]; then ok "credential-backed read via gateway /fc succeeded (HTTP 200, ${BL}B)"
   else log "  –    credentialed read returned HTTP $POS (${BL}B) — may need a fresh ephemeral proof (run 10 first)"; fi
+else
+  log "  –    no active self-description published — skipped"
+fi
+
+echo
+log "══ F. The active self-description was created through the gateway ══"
+# 07 records a 2xx gated publication in $RUN/07-publication.env. If the catalogue has an active
+# SD but no such record, something wrote it directly to the backend (e.g. 06's standalone demo),
+# so the "published through the perimeter" claim would be false.
+REC="$RUN/07-publication.env"
+if [ "$HAVE_SD" = 1 ]; then
+  if grep -q '^CODE=2' "$REC" 2>/dev/null; then
+    ok "active SD was published via sd-tooling-be -> gateway /fc ($(grep -oE '^CODE=[0-9]+' "$REC"), $(grep -oE '^WHEN=.*' "$REC" | cut -d= -f2))"
+  else
+    bad "an active SD exists but 07 recorded no gated publication — it was created another way (direct backend POST?)"
+  fi
 else
   log "  –    no active self-description published — skipped"
 fi
