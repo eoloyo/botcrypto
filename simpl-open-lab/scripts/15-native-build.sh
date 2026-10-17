@@ -60,6 +60,18 @@ for spec in "${SPECS[@]}"; do
   # fc-service: its DatabaseConfig (a TransactionManagementConfigurer with an autowired DataSource)
   # is created with the transaction advisor during AOT, before properties are bound. The patch drops
   # the redundant configurer (hibernateTransactionManager is the only TransactionManager).
+  # JPA services: Hibernate cannot generate lazy-loading proxy classes in a native image (bytecode
+  # provider 'none'); build-time enhancement makes the entities their own proxies. Without it every
+  # LAZY association / getReferenceById fails at runtime (e.g. the auth-provider cannot load its
+  # private key, so the gateway falls back to its self-signed certificate).
+  case "$name" in
+    identity-provider) enh=identity-provider ;; security-attributes-provider) enh=sap ;;
+    auth-provider-*) enh=authprovider ;; *) enh= ;;
+  esac
+  if [ -n "$enh" ]; then
+    p="$REPO_LAB_DIR/iaa/patches/$enh-hibernate-enhance.patch"
+    git -C "$d" apply --reverse --check "$p" 2>/dev/null || git -C "$d" apply "$p" || { log "  cannot apply $p"; continue; }
+  fi
   if [ "$name" = fc-service ]; then
     p="$REPO_LAB_DIR/catalogue/patches/catalogue-native-aot.patch"
     git -C "$d" apply --reverse --check "$p" 2>/dev/null || git -C "$d" apply "$p" || { log "  cannot apply $p"; continue; }
@@ -95,12 +107,17 @@ json.dump(d, open(p, "w"), indent=2)
 EOF
   cfg=$(find "$d/target/graalvm-reachability-metadata" -name '*.json' -printf '%h\n' 2>/dev/null | sort -u | paste -sd,)
   [ -d "$agent" ] && cfg="${cfg:+$cfg,}$agent"
+  # Spring's commons-logging (spring-jcl) must be initialized at build time. With jcl-over-slf4j
+  # (fc-service) LogFactory is SLF4J's bridge instead: initializing it in the builder freezes SLF4J's
+  # NOP provider into the image ("LoggerFactory is not a Logback LoggerContext") — leave it to run time.
+  jclinit="--initialize-at-build-time=org.apache.commons.logging.LogFactory,org.apache.commons.logging.LogFactoryService"
+  compgen -G "$x/BOOT-INF/lib/jcl-over-slf4j-*.jar" >/dev/null && jclinit=
   # 3. native-image. Spring AOT's native-image.properties supplies the main class and its flags.
   rm -f "$NATIVE_DIR/bin/$name"
   env -u JAVA_TOOL_OPTIONS JAVA_HOME="$GRAALVM_HOME" "$GRAALVM_HOME/bin/native-image" \
     -cp "$x:$x/BOOT-INF/classes:$(ls "$x"/BOOT-INF/lib/*.jar | paste -sd:)" --no-fallback -o "$NATIVE_DIR/bin/$name" \
     ${cfg:+-H:ConfigurationFileDirectories=$cfg} \
-    --initialize-at-build-time=org.apache.commons.logging.LogFactory,org.apache.commons.logging.LogFactoryService \
+    $jclinit \
     -H:+ReportExceptionStackTraces ${NATIVE_EXTRA:-} $nativeopts >>"$L" 2>&1
   if [ -x "$NATIVE_DIR/bin/$name" ]; then
     log "  OK $name: $(du -m "$NATIVE_DIR/bin/$name" | cut -f1) MB in $(( $(date +%s)-t0 ))s ($(grep -ao 'Peak RSS: [0-9.]*GB' "$L" | tail -1))"
