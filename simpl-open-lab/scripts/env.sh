@@ -90,7 +90,32 @@ bootjar(){
       >/dev/null 2>&1 || { echo "-jar $jar"; return; }
     echo "$jar" > "$d/.src"
   fi
+  # HotSpot rejects an archive whose classpath changed ("not the one used while building the shared
+  # archive") but AutoCreateSharedArchive only creates a missing archive, never rewrites a stale one:
+  # the service would silently run without CDS for good. Drop archives older than the extraction.
+  [ "$CDS_DIR/$name.jsa" -ot "$d/.src" ] && rm -f "$CDS_DIR/$name.jsa"
   echo "-XX:SharedArchiveFile=$CDS_DIR/$name.jsa -XX:+AutoCreateSharedArchive -jar $(ls "$d"/*.jar | head -1)"
+}
+
+# ---- runtime: jvm (default) | agent | native -----------------------------------
+# SIMPL_RUNTIME=native  runs the GraalVM native executables that 15-native-build.sh puts in
+#                       $NATIVE_DIR/bin/<name>; a service without one falls back to the JVM.
+# SIMPL_RUNTIME=agent   runs the JVM under GraalVM's tracing agent, which records the reflection,
+#                       resources and proxies each service really uses into $NATIVE_DIR/agent/<name>
+#                       (merged across runs). 15-native-build.sh feeds that to native-image.
+# svc <cds-instance> <fat-jar> <native-name> prints the launch command for the selected runtime.
+export SIMPL_RUNTIME="${SIMPL_RUNTIME:-jvm}"
+export NATIVE_DIR="$LAB_ROOT/native"
+export GRAALVM_HOME="${GRAALVM_HOME:-$LAB_ROOT/graalvm}"
+svc(){
+  local cds="$1" jar="$2" name="$3"
+  case "$SIMPL_RUNTIME" in
+    native) [ -x "$NATIVE_DIR/bin/$name" ] && { echo "$NATIVE_DIR/bin/$name"; return; } ;;
+    agent)  mkdir -p "$NATIVE_DIR/agent/$name"
+            echo "$GRAALVM_HOME/bin/java -agentlib:native-image-agent=config-merge-dir=$NATIVE_DIR/agent/$name $(bootjar "$cds" "$jar" | grep -o -- '-jar .*')"
+            return ;;
+  esac
+  echo "java $SIMPL_JAVA_OPTS $(bootjar "$cds" "$jar")"
 }
 
 # Wait until a URL answers (any HTTP status) or timeout.

@@ -109,6 +109,18 @@ applypatch "$IAA/authentication_provider" "$REPO_LAB_DIR/iaa/patches/authprovide
 # second, nested SpringApplication on every start; take EjbcaClient from the running app instead.
 # Also what blocks a GraalVM native image (AOT applies the main initializer to the nested app).
 applypatch "$IAA/identity-provider" "$REPO_LAB_DIR/iaa/patches/identity-provider-liquibase-no-nested-app.patch"
+# All four IAA services: simpl-api-iaa (and simpl-http-client-core) declare the code generators that
+# produced their sources (openapi-generator, simpl-maven-plugin -> maven-core 4 / jline / plexus,
+# swagger-parser -> rhino / json-schema-validator) with compile scope, so ~100 build-time jars ship in
+# every service. Exclude them (all unit tests pass; jdeps finds no runtime reference into them).
+# SIMPL_SLIM_DEPS=0 skips this, to reproduce upstream's dependency set (on a fresh clone).
+if [ "${SIMPL_SLIM_DEPS:-1}" = 1 ]; then
+  applypatch "$IAA/identity-provider"            "$REPO_LAB_DIR/iaa/patches/identity-provider-runtime-deps.patch"
+  applypatch "$IAA/authentication_provider"      "$REPO_LAB_DIR/iaa/patches/authprovider-runtime-deps.patch"
+  applypatch "$IAA/security-attributes-provider" "$REPO_LAB_DIR/iaa/patches/sap-runtime-deps.patch"
+  applypatch "$GW"                               "$REPO_LAB_DIR/iaa/patches/tier2-gateway-runtime-deps.patch"
+  applypatch "$SRC/sd-tooling-be"                "$REPO_LAB_DIR/iaa/patches/sdtooling-runtime-deps.patch"   # Lombok
+fi
 # sd-tooling-be: add GET /v1/selfDescriptions/discover/{id} — a credential-backed catalogue READ
 # through the Tier-2 gateway (FederatedCatalogueTier2Client.getSelfDescription), so discovery is
 # gated by the same mTLS + ephemeral-proof + ABAC perimeter as publish (see 10-gated-discovery.sh)
@@ -159,14 +171,14 @@ JAVA_HOME=$JH bash "$REPO_LAB_DIR/iaa/inject-fc-abac-rule.sh" "$(jar "$GW")" CON
   || log "WARN: could not inject the /fc ABAC rule into the gateway jar"
 # ── 3. boot the IAA mesh ──────────────────────────────────────────────────────────────
 # identity-provider (:8103, the participant registry the GA + SAP call internally)
-up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar identity-provider "$(jar "$IAA/identity-provider")") \
+up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH $(svc identity-provider "$(jar "$IAA/identity-provider")" identity-provider) \
   --spring.profiles.active=local --server.port=8103 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/authority_identityprovider \
   --spring.datasource.username=authority_identityprovider --spring.datasource.password=authority_identityprovider \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --open-id-connect.certs-endpoint=http://localhost:9099/certs
 # authentication_provider — GA (:8105, authority) and provider (:8104, participant)
-apboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar "auth-provider-$1" "$(jar "$IAA/authentication_provider")") \
+apboot(){ bg env JAVA_HOME=$JH $(svc "auth-provider-$1" "$(jar "$IAA/authentication_provider")" "auth-provider-$2") \
   --spring.profiles.active=$2 --server.port=$1 --server.address="$BACKEND_BIND" \
   --spring.kafka.producer.properties.max.block.ms=1500 $KAFKA_ARGS \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/$3 \
@@ -181,7 +193,7 @@ up http://localhost:8105/actuator/health || apboot 8105 local-authority authorit
 # (it needs the GA credentialed first), so :8104 is booted THERE, after the gateway, to
 # avoid a fatal "Connection refused localhost:8443 / Application run failed" at boot.
 # SAP (:8102, GA ephemeral-proof needs it)
-up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar security-attributes-provider "$(jar "$IAA/security-attributes-provider")") \
+up http://localhost:8102/actuator/health || bg env JAVA_HOME=$JH $(svc security-attributes-provider "$(jar "$IAA/security-attributes-provider")" security-attributes-provider) \
   --spring.profiles.active=local --server.port=8102 --server.address="$BACKEND_BIND" \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/authority_securityattributesprovider \
   --spring.datasource.username=postgres --spring.datasource.password=postgres \
@@ -194,7 +206,7 @@ log "IAA authority side up (identity-provider, GA auth_provider, SAP)"
 # ── 4. enroll the AUTHORITY (root of trust) then boot the gateway with its identity ───
 bash "$REPO_LAB_DIR/iaa/enroll.sh" 8105 "Local Authority" true  | tail -1
 GWJAR="$(jar "$GW")"
-gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar tier2-gateway "$GWJAR") --spring.profiles.active=local-authority --server.port=8443 \
+gwboot(){ bg env JAVA_HOME=$JH $(svc tier2-gateway "$GWJAR" tier2-gateway) --spring.profiles.active=local-authority --server.port=8443 \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --sap.url=http://localhost:8102 --identity-provider.url=http://localhost:8103 \
   --authentication-provider.url=http://localhost:8105 --users-roles.url=http://localhost:8106 \
@@ -205,7 +217,7 @@ gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar tier2-gateway "$G
 #    event; the gateway's @KafkaListener invalidates its CredentialCache and picks up the new
 #    identity live (verified by 13-kafka-events.sh) — no restart, as in production.
 #  - running + no broker: the event is lost, so restart it to make it re-read the identity.
-GWPID=$(pgrep -f "tier2-gateway.*local\.jar" | head -1 || true)
+GWPID=$(pgrep -f "tier2-gateway.*local\.jar|$NATIVE_DIR/bin/tier2-gateway" | head -1 || true)
 if [ -z "$GWPID" ]; then
   gwboot
 elif [ -n "${SIMPL_BROKER:-}" ]; then
@@ -221,7 +233,7 @@ waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
 # sd-tooling-be (the real publisher) talks to the gateway and the participant auth-provider
 # only when it publishes, so boot it now — in parallel with :8104 and the provider enrolment.
 SDT="$LAB_ROOT/src/sd-tooling-be"
-up http://localhost:8090/status || bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS $(bootjar sd-tooling-be "$(jar "$SDT")") \
+up http://localhost:8090/status || bg env JAVA_HOME=$JH $(svc sd-tooling-be "$(jar "$SDT")" sd-tooling-be) \
   --server.port=8090 --server.address="$BACKEND_BIND" --web.mvc.bearer-token.required=false \
   --vc-issuer.api-key=localkey --vc-issuer.client-id=local-client --vc-issuer.service.url=http://localhost:9085/vcIssuerService \
   --authentication-provider.service.url=http://localhost:8104 \

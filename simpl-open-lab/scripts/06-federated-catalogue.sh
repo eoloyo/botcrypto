@@ -88,6 +88,11 @@ if ! git -C "$CAT" apply --reverse --check "$PATCH" 2>/dev/null; then
   log "applying catalogue-local.patch (wires /graph-rebuild + rebuild grace)"
   git -C "$CAT" apply "$PATCH" || { log "patch failed to apply — is catalogue-be at a compatible revision?"; exit 1; }
 fi
+# Lombok is compile-time only: keep it out of the runnable jar (SIMPL_SLIM_DEPS=0 keeps upstream's).
+SLIM="$REPO_LAB_DIR/catalogue/patches/catalogue-runtime-deps.patch"
+if [ "${SIMPL_SLIM_DEPS:-1}" = 1 ] && ! git -C "$CAT" apply --reverse --check "$SLIM" 2>/dev/null; then
+  git -C "$CAT" apply "$SLIM" && rm -f "$CAT/target/fc-service-server.jar" && log "applied catalogue-runtime-deps.patch"
+fi
 if [ ! -f "$CAT/target/fc-service-server.jar" ] || [ "$PATCH" -nt "$CAT/target/fc-service-server.jar" ]; then
   log "building catalogue-be..."
   ( cd "$CAT" && noproxy_env mvn -q -B -ntp -DskipTests -Dspotless.check.skip=true \
@@ -107,7 +112,7 @@ log "quality-scoring stub up on :$QS_PORT (returns a valid Tier-A MQR report)"
 # ---- 5. boot the catalogue pointing at the local stub + graph store ----------
 if ! curl -s -o /dev/null "http://localhost:$CAT_PORT/self-descriptions" 2>/dev/null; then
   ( cd "$CAT" && noproxy_env SCHEMA_MANAGER_SUBSCRIPTION_ENABLED=false \
-      nohup java $SIMPL_JAVA_OPTS $(bootjar fc-service "$CAT/target/fc-service-server.jar") \
+      nohup $(svc fc-service "$CAT/target/fc-service-server.jar" fc-service) \
         --server.port=$CAT_PORT --server.address="${BACKEND_BIND:-127.0.0.1}" \
         --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/catalogue \
         --spring.datasource.username=postgres --spring.datasource.password=postgres \

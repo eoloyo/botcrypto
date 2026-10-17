@@ -1,0 +1,65 @@
+diff --git a/pom.xml b/pom.xml
+index cbe9194..93967aa 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -31,6 +31,23 @@
+         <dependency>
+             <groupId>eu.europa.ec.simpl</groupId>
+             <artifactId>simpl-api-iaa</artifactId>
++            <!-- Code generators that simpl-api-iaa declares with compile scope: they generated its
++                 sources at build time and are not used at runtime (openapi-generator, the Simpl Maven
++                 plugin -> maven-core/jline/plexus, swagger-parser -> rhino/json-schema-validator). -->
++            <exclusions>
++                <exclusion>
++                    <groupId>org.openapitools</groupId>
++                    <artifactId>openapi-generator</artifactId>
++                </exclusion>
++                <exclusion>
++                    <groupId>eu.europa.ec.simpl</groupId>
++                    <artifactId>simpl-maven-plugin</artifactId>
++                </exclusion>
++                <exclusion>
++                    <groupId>io.swagger.parser.v3</groupId>
++                    <artifactId>swagger-parser</artifactId>
++                </exclusion>
++            </exclusions>
+         </dependency>
+         <dependency>
+             <groupId>eu.europa.ec.simpl</groupId>
+diff --git a/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/migration_2025_07_15/SchemaMigration.java b/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/migration_2025_07_15/SchemaMigration.java
+index f017a39..67e9657 100644
+--- a/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/migration_2025_07_15/SchemaMigration.java
++++ b/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/migration_2025_07_15/SchemaMigration.java
+@@ -1,6 +1,5 @@
+ package eu.europa.ec.simpl.identityprovider.liquibase.migration_2025_07_15;
+ 
+-import com.google.common.base.Objects;
+ import eu.europa.ec.simpl.identityprovider.ejbca.EjbcaIdentityFilter;
+ import eu.europa.ec.simpl.identityprovider.exchanges.EjbcaExchangeV2;
+ import eu.europa.ec.simpl.identityprovider.liquibase.AbstractEjbcaSchemaMigration;
+@@ -20,6 +19,7 @@ import java.time.Instant;
+ import java.util.ArrayList;
+ import java.util.Base64;
+ import java.util.List;
++import java.util.Objects;
+ import java.util.UUID;
+ import java.util.function.Supplier;
+ import lombok.extern.log4j.Log4j2;
+@@ -177,7 +177,7 @@ public class SchemaMigration extends AbstractEjbcaSchemaMigration {
+     private void updateParticipantIsAuthority(Connection connection, UUID participantId, String participantType)
+             throws SQLException {
+         String updateParticipantIsAuthority = "UPDATE participant_new SET is_authority = ? WHERE id = ?";
+-        if (Objects.equal(this.authorityPlaceHolder, participantType)) {
++        if (Objects.equals(this.authorityPlaceHolder, participantType)) {
+             try (var updateStatement = connection.prepareStatement(updateParticipantIsAuthority)) {
+                 updateStatement.setBoolean(1, true);
+                 updateStatement.setObject(2, participantId);
+@@ -213,7 +213,7 @@ public class SchemaMigration extends AbstractEjbcaSchemaMigration {
+             String participantCredentialId)
+             throws SQLException {
+         String updateParticipantIsAuthority = "UPDATE participant_new SET active_credential_id = ? WHERE id = ?";
+-        if (Objects.equal(participantCredentialId, credentialId)) {
++        if (Objects.equals(participantCredentialId, credentialId)) {
+             try (var updateStatement = connection.prepareStatement(updateParticipantIsAuthority)) {
+                 updateStatement.setObject(1, randomCredentialId);
+                 updateStatement.setObject(2, participantId);

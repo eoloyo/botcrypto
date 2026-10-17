@@ -1,0 +1,28 @@
+diff --git a/pom.xml b/pom.xml
+index 7bbd95b..ed6cf07 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -24,6 +24,23 @@
+         <dependency>
+             <groupId>eu.europa.ec.simpl</groupId>
+             <artifactId>simpl-spring-boot-starter</artifactId>
++            <!-- Code generators that simpl-api-iaa declares with compile scope: they generated its
++                 sources at build time and are not used at runtime (openapi-generator, the Simpl Maven
++                 plugin -> maven-core/jline/plexus, swagger-parser -> rhino/json-schema-validator). -->
++            <exclusions>
++                <exclusion>
++                    <groupId>org.openapitools</groupId>
++                    <artifactId>openapi-generator</artifactId>
++                </exclusion>
++                <exclusion>
++                    <groupId>eu.europa.ec.simpl</groupId>
++                    <artifactId>simpl-maven-plugin</artifactId>
++                </exclusion>
++                <exclusion>
++                    <groupId>io.swagger.parser.v3</groupId>
++                    <artifactId>swagger-parser</artifactId>
++                </exclusion>
++            </exclusions>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework.boot</groupId>

@@ -1,0 +1,54 @@
+diff --git a/pom.xml b/pom.xml
+index c435027..f901521 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -20,6 +20,14 @@
+     </properties>
+ 
+     <dependencies>
++        <dependency>
++            <!-- javax.annotation.Nullable used in the sources; it used to arrive through the
++                 build-time code generators excluded below. Compile-time only. -->
++            <groupId>com.google.code.findbugs</groupId>
++            <artifactId>jsr305</artifactId>
++            <version>3.0.2</version>
++            <scope>provided</scope>
++        </dependency>
+         <dependency>
+             <groupId>org.springframework.boot</groupId>
+             <artifactId>spring-boot-starter-web</artifactId>
+@@ -43,11 +51,34 @@
+         <dependency>
+             <groupId>eu.europa.ec.simpl</groupId>
+             <artifactId>simpl-api-iaa</artifactId>
++            <!-- Code generators that simpl-api-iaa declares with compile scope: they generated its
++                 sources at build time and are not used at runtime (openapi-generator, the Simpl Maven
++                 plugin -> maven-core/jline/plexus, swagger-parser -> rhino/json-schema-validator). -->
++            <exclusions>
++                <exclusion>
++                    <groupId>org.openapitools</groupId>
++                    <artifactId>openapi-generator</artifactId>
++                </exclusion>
++                <exclusion>
++                    <groupId>eu.europa.ec.simpl</groupId>
++                    <artifactId>simpl-maven-plugin</artifactId>
++                </exclusion>
++                <exclusion>
++                    <groupId>io.swagger.parser.v3</groupId>
++                    <artifactId>swagger-parser</artifactId>
++                </exclusion>
++            </exclusions>
+         </dependency>
+         <dependency>
+             <groupId>eu.europa.ec.simpl</groupId>
+             <artifactId>simpl-http-client-core</artifactId>
+             <version>${simpl.httpclient.version}</version>
++            <exclusions><!-- build-time code generator, see simpl-api-iaa above -->
++                <exclusion>
++                    <groupId>eu.europa.ec.simpl</groupId>
++                    <artifactId>simpl-maven-plugin</artifactId>
++                </exclusion>
++            </exclusions>
+         </dependency>
+         <dependency>
+             <groupId>eu.europa.ec.simpl</groupId>

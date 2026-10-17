@@ -1,0 +1,20 @@
+diff --git a/pom.xml b/pom.xml
+index 5597b5d..7740fa9 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -818,6 +818,15 @@
+             <plugin>
+                 <groupId>org.springframework.boot</groupId>
+                 <artifactId>spring-boot-maven-plugin</artifactId>
++                <configuration>
++                    <!-- Lombok generates code at compile time; it is not needed in the runnable jar -->
++                    <excludes>
++                        <exclude>
++                            <groupId>org.projectlombok</groupId>
++                            <artifactId>lombok</artifactId>
++                        </exclude>
++                    </excludes>
++                </configuration>
+                 <executions>
+                     <execution>
+                         <goals>

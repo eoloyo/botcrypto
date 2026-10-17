@@ -7,7 +7,7 @@ index bcec7de..01496f9 100644
                filters:
                  - StripPrefix=1
 +            - id: fc
-+              uri: ${federated-catalogue.url}
++              uri: ${federated-catalogue.url:http://localhost:8081}
 +              predicates:
 +                - Path=/fc/**
 +              filters:
