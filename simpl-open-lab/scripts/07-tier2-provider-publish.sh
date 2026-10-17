@@ -74,7 +74,11 @@ log "infra up (Postgres, Redis, CA shim, JWKS, OCSP, quality-scoring)"
 # (or redpanda|auto) starts a broker first so the events flow as in production.
 if [ -n "${SIMPL_BROKER:-}" ]; then
   SIMPL_BROKER="$SIMPL_BROKER" bash "$REPO_LAB_DIR/iaa/broker.sh" || { log "broker failed to start"; exit 1; }
+  # The services' local profiles disagree on the broker address (auth-provider: :30092,
+  # gateway: :9092), so point every Kafka client at the one broker explicitly.
+  KAFKA_ARGS="--spring.kafka.bootstrap-servers=localhost:9092"
 fi
+KAFKA_ARGS="${KAFKA_ARGS:-}"
 
 # ── 1. fc-service (catalogue) with schemas + named DataSchema ─────────────────────────
 bash "$(dirname "$0")/06-federated-catalogue.sh" >/dev/null 2>&1 || true
@@ -155,7 +159,7 @@ up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAV
 # authentication_provider — GA (:8105, authority) and provider (:8104, participant)
 apboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$IAA/authentication_provider")" \
   --spring.profiles.active=$2 --server.port=$1 --server.address="$BACKEND_BIND" \
-  --spring.kafka.producer.properties.max.block.ms=1500 \
+  --spring.kafka.producer.properties.max.block.ms=1500 $KAFKA_ARGS \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/$3 \
   --spring.datasource.username=postgres --spring.datasource.password=postgres \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
@@ -185,7 +189,7 @@ gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$GWJAR" --spring.prof
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
   --sap.url=http://localhost:8102 --identity-provider.url=http://localhost:8103 \
   --authentication-provider.url=http://localhost:8105 --users-roles.url=http://localhost:8106 \
-  --federated-catalogue.url=http://localhost:8081 --keypair.algorithm=EC; }
+  --federated-catalogue.url=http://localhost:8081 --keypair.algorithm=EC $KAFKA_ARGS; }
 # (re)start the gateway so it fetches its server identity from the now-credentialed GA
 ps -eo pid,args | grep 'tier2-gateway-local.jar' | grep -v grep | awk '{print $1}' | xargs -r kill 2>/dev/null || true
 sleep 2; gwboot; waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
