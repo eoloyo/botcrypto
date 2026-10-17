@@ -1,0 +1,33 @@
+diff --git a/src/main/java/eu/xfsc/fc/core/config/DatabaseConfig.java b/src/main/java/eu/xfsc/fc/core/config/DatabaseConfig.java
+index 39af740..5e0cf9e 100644
+--- a/src/main/java/eu/xfsc/fc/core/config/DatabaseConfig.java
++++ b/src/main/java/eu/xfsc/fc/core/config/DatabaseConfig.java
+@@ -9,13 +9,15 @@ import org.springframework.context.annotation.Configuration;
+ import org.springframework.orm.hibernate5.HibernateTransactionManager;
+ import org.springframework.orm.hibernate5.LocalSessionFactoryBean;
+ import org.springframework.transaction.PlatformTransactionManager;
+-import org.springframework.transaction.TransactionManager;
+ import org.springframework.transaction.annotation.EnableTransactionManagement;
+-import org.springframework.transaction.annotation.TransactionManagementConfigurer;
+ 
+ @Configuration
+ @EnableTransactionManagement
+-public class DatabaseConfig implements TransactionManagementConfigurer {
++// Not a TransactionManagementConfigurer: hibernateTransactionManager is the only TransactionManager
++// (Spring Data Neo4j's is conditional on none existing), so @Transactional resolves to it by type
++// anyway. As a configurer, this class and its DataSource were created with the transaction advisor,
++// before configuration properties are bound, which breaks Spring AOT processing.
++public class DatabaseConfig {
+ 
+     @Autowired
+     DataSource dataSource;
+@@ -52,9 +54,4 @@ public class DatabaseConfig implements TransactionManagementConfigurer {
+         hibernateProperties.setProperty("hibernate.hbm2ddl.auto", "validate");
+         return hibernateProperties;
+     }
+-
+-    @Override
+-    public TransactionManager annotationDrivenTransactionManager() {
+-        return hibernateTransactionManager(sessionFactory().getObject());
+-    }
+ }

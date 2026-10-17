@@ -19,15 +19,18 @@ if [ ! -x "$GRAALVM_HOME/bin/native-image" ]; then
   log "downloading GraalVM CE 21.0.2 to $GRAALVM_HOME"
   mkdir -p "$GRAALVM_HOME" && curl -fsSL "$GRAAL_URL" | tar -xz --strip-components=1 -C "$GRAALVM_HOME" || exit 1
 fi
-# name | repo dir | AOT profiles
+# name | repo dir | AOT profiles | system properties for the AOT run
+# AOT instantiates a few beans at build time (configuration that feeds bean post-processors), so
+# properties those beans need must exist then. They only satisfy that build-time instantiation:
+# at runtime the values come from the launch command, as on the JVM.
 SPECS=(
-  "identity-provider|identity-provider|local"
-  "auth-provider-local-authority|authentication_provider|local-authority"
-  "auth-provider-local-consumer|authentication_provider|local-consumer"
-  "security-attributes-provider|security-attributes-provider|local"
-  "tier2-gateway|tier2-gateway|local-authority"
-  "sd-tooling-be|sd-tooling-be|default"
-  "fc-service|catalogue-be|default"
+  "identity-provider|identity-provider|local|"
+  "auth-provider-local-authority|authentication_provider|local-authority|"
+  "auth-provider-local-consumer|authentication_provider|local-consumer|"
+  "security-attributes-provider|security-attributes-provider|local|"
+  "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081"
+  "sd-tooling-be|sd-tooling-be|default|"
+  "fc-service|catalogue-be|default|"
 )
 want=("$@")
 gmvn(){ env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy \
@@ -35,13 +38,21 @@ gmvn(){ env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u 
   mvn -B -ntp -DskipTests -Dspotless.check.skip=true -Dspotless.apply.skip=true -Dlicense.skip=true \
   -Dcheckstyle.skip=true -Dmaven.javadoc.skip=true -Djacoco.skip=true "$@"; }
 for spec in "${SPECS[@]}"; do
-  IFS='|' read -r name repo profiles <<<"$spec"
+  IFS='|' read -r name repo profiles aotprops <<<"$spec"
   [ ${#want[@]} -gt 0 ] && [[ ! " ${want[*]} " == *" $name "* ]] && continue
   d="$SRC/$repo"; L="$LOGS/$name.log"; : > "$L"; t0=$(date +%s)
+  # fc-service: its DatabaseConfig (a TransactionManagementConfigurer with an autowired DataSource)
+  # is created with the transaction advisor during AOT, before properties are bound. The patch drops
+  # the redundant configurer (hibernateTransactionManager is the only TransactionManager).
+  if [ "$name" = fc-service ]; then
+    p="$REPO_LAB_DIR/catalogue/patches/catalogue-native-aot.patch"
+    git -C "$d" apply --reverse --check "$p" 2>/dev/null || git -C "$d" apply "$p" || { log "  cannot apply $p"; continue; }
+  fi
   log "native: $name ($repo, AOT profiles '$profiles') — log $L"
   # 1. Spring AOT for this profile (compiled into target/classes) + the reachability metadata
   #    repository (target/graalvm-reachability-metadata) for the third-party libraries
   aot=(); [ "$profiles" != default ] && aot=(-Dspring-boot.aot.profiles="$profiles")
+  [ -n "$aotprops" ] && aot+=(-Dspring-boot.aot.jvmArguments="$aotprops")
   ( cd "$d" && gmvn -Pnative "${aot[@]}" package >>"$L" 2>&1 ) || { log "  AOT/package failed — see $L"; continue; }
   # The image gets exactly what the executable jar runs on the JVM: its BOOT-INF/classes (now with
   # the AOT classes) and BOOT-INF/lib, plus the jar root, where Boot moves META-INF/native-image
