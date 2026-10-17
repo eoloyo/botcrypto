@@ -105,6 +105,9 @@ applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch"
 applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-fc-route.patch"
 # auth-provider: make the startup tier-one key-push non-fatal (so :8104 boots on a fresh agent)
 applypatch "$IAA/authentication_provider" "$REPO_LAB_DIR/iaa/patches/authprovider-startup-keypush-nonfatal.patch"
+# auth-provider: use the registered BouncyCastle provider instead of constructing one per cipher call
+# (9 ms each on the JVM; a native image only accepts the provider instance it verified at build time)
+applypatch "$IAA/authentication_provider" "$REPO_LAB_DIR/iaa/patches/authprovider-bc-provider.patch"
 # identity-provider: the Liquibase EJBCA backfills (AbstractEjbcaSchemaMigration) each booted a
 # second, nested SpringApplication on every start; take EjbcaClient from the running app instead.
 # Also what blocks a GraalVM native image (AOT applies the main initializer to the nested app).

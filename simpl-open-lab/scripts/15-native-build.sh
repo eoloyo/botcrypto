@@ -11,6 +11,8 @@
 # Spring AOT fixes the active profiles and the @Profile / @Conditional bean set at build time, so
 # each image is built for the profile the lab runs it with; the authentication provider runs as
 # the authority (GA) and as a participant, which have different beans, so it gets two images.
+# The IAA services register BouncyCastle in main(); a native image must register (and verify)
+# security providers at build time, hence -H:AdditionalSecurityProviders for those images.
 # One build peaks at ~8-9 GB RSS and ~4 CPU-minutes x 4 cores: images are built one at a time.
 source "$(dirname "$0")/env.sh"; set +e
 SRC="$LAB_ROOT/src"; LOGS="$NATIVE_DIR/logs"; mkdir -p "$NATIVE_DIR/bin" "$LOGS"
@@ -24,11 +26,11 @@ fi
 # properties those beans need must exist then. They only satisfy that build-time instantiation:
 # at runtime the values come from the launch command, as on the JVM.
 SPECS=(
-  "identity-provider|identity-provider|local|"
-  "auth-provider-local-authority|authentication_provider|local-authority|"
-  "auth-provider-local-consumer|authentication_provider|local-consumer|"
-  "security-attributes-provider|security-attributes-provider|local|"
-  "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081|--initialize-at-run-time=io.netty"
+  "identity-provider|identity-provider|local||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
+  "auth-provider-local-authority|authentication_provider|local-authority||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
+  "auth-provider-local-consumer|authentication_provider|local-consumer||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
+  "security-attributes-provider|security-attributes-provider|local||-H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
+  "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081|--initialize-at-run-time=io.netty -H:AdditionalSecurityProviders=org.bouncycastle.jce.provider.BouncyCastleProvider"
   "sd-tooling-be|sd-tooling-be|default|"
   "fc-service|catalogue-be|default||--initialize-at-run-time=io.netty"
 )
@@ -61,6 +63,9 @@ for spec in "${SPECS[@]}"; do
   # the AOT classes) and BOOT-INF/lib, plus the jar root, where Boot moves META-INF/native-image
   # (main class + Spring's image flags). dependency:build-classpath returned test-only jars too.
   jar=$(ls "$d"/target/*.jar | grep -v -- '-plain\|\.original' | head -1); x="$d/target/native-x"
+  # 07 injects the /fc ABAC rule into the gateway jar after building it; the image needs it too
+  [ "$name" = tier2-gateway ] && JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+    bash "$REPO_LAB_DIR/iaa/inject-fc-abac-rule.sh" "$jar" CONSUMER >>"$L" 2>&1
   rm -rf "$x" && mkdir -p "$x" && ( cd "$x" && unzip -q "$jar" ) || { log "  cannot unpack $jar"; continue; }
   # 2. configuration: reachability metadata + what the tracing agent recorded for this service.
   #    Hibernate on native must not find the ByteBuddy bytecode provider (Spring's own hints exclude

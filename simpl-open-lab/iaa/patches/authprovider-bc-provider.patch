@@ -1,0 +1,87 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/helpers/encryption/EncryptionSupport.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/helpers/encryption/EncryptionSupport.java
+index e4dff34..84c2f90 100644
+--- a/src/main/java/eu/europa/ec/simpl/authenticationprovider/helpers/encryption/EncryptionSupport.java
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/helpers/encryption/EncryptionSupport.java
+@@ -6,7 +6,9 @@ import java.io.IOException;
+ import java.security.InvalidAlgorithmParameterException;
+ import java.security.InvalidKeyException;
+ import java.security.NoSuchAlgorithmException;
++import java.security.Provider;
+ import java.security.SecureRandom;
++import java.security.Security;
+ import java.util.Arrays;
+ import java.util.Base64;
+ import javax.crypto.Cipher;
+@@ -96,7 +98,7 @@ public class EncryptionSupport {
+         Cipher cipher = null;
+ 
+         try {
+-            cipher = Cipher.getInstance(CIPHER_ALGORITHM, new BouncyCastleProvider());
++            cipher = Cipher.getInstance(CIPHER_ALGORITHM, bouncyCastle());
+         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+             throw new IllegalStateException(
+                     "Exception thrown while getting cipher instance, but cipher parameters are constants", e);
+@@ -172,4 +174,15 @@ public class EncryptionSupport {
+          */
+         record InvalidData() implements DecryptOutcome {}
+     }
++
++    /**
++     * The BouncyCastle provider registered at startup (AuthenticationProviderApplication.main), rather
++     * than a new provider per call: constructing BouncyCastleProvider registers hundreds of algorithms,
++     * and a native image only accepts providers it verified at build time. Falls back to a new
++     * instance when none is registered (e.g. unit tests).
++     */
++    private static Provider bouncyCastle() {
++        Provider provider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME);
++        return provider != null ? provider : new BouncyCastleProvider();
++    }
+ }
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/migrations/liquibase/migration_2025_07_04/CredentialKeyPairMigration.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/migrations/liquibase/migration_2025_07_04/CredentialKeyPairMigration.java
+index 96250ac..1797e42 100644
+--- a/src/main/java/eu/europa/ec/simpl/authenticationprovider/migrations/liquibase/migration_2025_07_04/CredentialKeyPairMigration.java
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/migrations/liquibase/migration_2025_07_04/CredentialKeyPairMigration.java
+@@ -5,7 +5,9 @@ import java.io.ByteArrayInputStream;
+ import java.io.SequenceInputStream;
+ import java.nio.charset.StandardCharsets;
+ import java.security.MessageDigest;
++import java.security.Provider;
+ import java.security.SecureRandom;
++import java.security.Security;
+ import java.security.cert.CertificateException;
+ import java.security.cert.CertificateFactory;
+ import java.security.cert.X509Certificate;
+@@ -210,7 +212,7 @@ public class CredentialKeyPairMigration implements CustomTaskChange {
+             byte[] actualCipher = Arrays.copyOfRange(cipherMessage, IV_SIZE, cipherMessage.length);
+ 
+             var parameterSpec = new GCMParameterSpec(TAG_LENGTH, iv);
+-            var cipher = Cipher.getInstance(CIPHER_ALGORITHM, new BouncyCastleProvider());
++            var cipher = Cipher.getInstance(CIPHER_ALGORITHM, bouncyCastle());
+             cipher.init(Cipher.DECRYPT_MODE, key, parameterSpec);
+             return cipher.doFinal(actualCipher);
+         } catch (Exception e) {
+@@ -225,7 +227,7 @@ public class CredentialKeyPairMigration implements CustomTaskChange {
+             secureRandom.nextBytes(iv);
+             var parameterSpec = new GCMParameterSpec(TAG_LENGTH, iv);
+ 
+-            var cipher = Cipher.getInstance(CIPHER_ALGORITHM, new BouncyCastleProvider());
++            var cipher = Cipher.getInstance(CIPHER_ALGORITHM, bouncyCastle());
+             cipher.init(Cipher.ENCRYPT_MODE, key, parameterSpec);
+ 
+             var inputStream = new ByteArrayInputStream(message);
+@@ -248,4 +250,15 @@ public class CredentialKeyPairMigration implements CustomTaskChange {
+         var keyBytes = Base64.getDecoder().decode(secretKeyBase64);
+         return new SecretKeySpec(keyBytes, CIPHER_ALGORITHM);
+     }
++
++    /**
++     * The BouncyCastle provider registered at startup (AuthenticationProviderApplication.main), rather
++     * than a new provider per call: constructing BouncyCastleProvider registers hundreds of algorithms,
++     * and a native image only accepts providers it verified at build time. Falls back to a new
++     * instance when none is registered (e.g. unit tests).
++     */
++    private static Provider bouncyCastle() {
++        Provider provider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME);
++        return provider != null ? provider : new BouncyCastleProvider();
++    }
+ }
