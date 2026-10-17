@@ -31,3 +31,22 @@ index 39af740..5e0cf9e 100644
 -        return hibernateTransactionManager(sessionFactory().getObject());
 -    }
  }
+diff --git a/src/main/java/eu/xfsc/fc/core/config/SelfDescriptionStoreConfig.java b/src/main/java/eu/xfsc/fc/core/config/SelfDescriptionStoreConfig.java
+index 38f4465..f6341dd 100644
+--- a/src/main/java/eu/xfsc/fc/core/config/SelfDescriptionStoreConfig.java
++++ b/src/main/java/eu/xfsc/fc/core/config/SelfDescriptionStoreConfig.java
+@@ -15,9 +15,12 @@ public class SelfDescriptionStoreConfig {
+     @Value("${publisher.impl}")
+     private String pubImpl;
+ 
++    // Declared as the implementation type, not the interface: Spring AOT generates the @Autowired field
++    // injection (dao) from the declared type, so with the interface the native image left it null.
++    // (PublishingSelfDescriptionStoreImpl's optional sdPublisher is still not injected on native.)
+     @Bean
+-    public SelfDescriptionStore sdStorePublisher() {
+-        SelfDescriptionStore sdStore = null;
++    public SelfDescriptionStoreImpl sdStorePublisher() {
++        SelfDescriptionStoreImpl sdStore = null;
+         if ("none".equals(pubImpl)) {
+             sdStore = new SelfDescriptionStoreImpl();
+         } else {
