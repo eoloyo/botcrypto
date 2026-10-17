@@ -28,6 +28,8 @@
 # time (native-image refuses to build when a seeded Random ends up in the image).
 # fc-service: Liquibase resolves its SQL scripts relative to the changelog, a lookup the tracing agent
 # does not record, so the application's resource directories are included explicitly.
+# Its schema-manager subscription is @ConditionalOnBooleanProperty, decided at AOT time: the build
+# disables it, as 06 does at runtime (SCHEMA_MANAGER_SUBSCRIPTION_ENABLED=false).
 # One build peaks at ~8-9 GB RSS and ~4 CPU-minutes x 4 cores: images are built one at a time.
 source "$(dirname "$0")/env.sh"; set +e
 SRC="$LAB_ROOT/src"; LOGS="$NATIVE_DIR/logs"; mkdir -p "$NATIVE_DIR/bin" "$LOGS"
@@ -47,7 +49,7 @@ SPECS=(
   "security-attributes-provider|security-attributes-provider|local||-Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
   "tier2-gateway|tier2-gateway|local-authority|-Dkeypair.algorithm=EC -Dsap.url=http://localhost:8102 -Didentity-provider.url=http://localhost:8103 -Dauthentication-provider.url=http://localhost:8105 -Dusers-roles.url=http://localhost:8106 -Dfederated-catalogue.url=http://localhost:8081|--initialize-at-run-time=io.netty -Djava.security.properties=$NATIVE_DIR/bouncycastle.security --initialize-at-build-time=org.bouncycastle --initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG\$Default,org.bouncycastle.jcajce.provider.drbg.DRBG\$NonceAndIV"
   "sd-tooling-be|sd-tooling-be|default|"
-  "fc-service|catalogue-be|default||--initialize-at-run-time=io.netty -H:+AddAllCharsets -H:IncludeResources=liquibase/.* -H:IncludeResources=defaultschema/.* -H:IncludeResources=contracts/.* -H:IncludeResources=static/.* -H:IncludeResources=dummy/.* -H:IncludeResources=event[.]json"
+  "fc-service|catalogue-be|default|-Dschema-manager.subscription.enabled=false|--initialize-at-run-time=io.netty -H:+AddAllCharsets -H:IncludeResources=liquibase/.* -H:IncludeResources=defaultschema/.* -H:IncludeResources=contracts/.* -H:IncludeResources=static/.* -H:IncludeResources=dummy/.* -H:IncludeResources=event[.]json"
 )
 printf 'security.provider.13=org.bouncycastle.jce.provider.BouncyCastleProvider\n' > "$NATIVE_DIR/bouncycastle.security"
 want=("$@")
