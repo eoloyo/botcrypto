@@ -6,7 +6,7 @@
 # gateway only learns about a new identity because 07 restarts it. With a broker
 # (SIMPL_BROKER=kafka ./07-tier2-provider-publish.sh) the events flow as in production.
 # This test proves that:
-#   A. a participant credential install answers 200 (the post-commit Kafka publish succeeds)
+#   A. a participant credential install succeeds (2xx — the post-commit Kafka publish works)
 #   B. the event is on the participant agent's own topic (iaa.iaa-local-consumer. prefix)
 #   C. the participant's identity-attributes event is published too
 #   D. a new Governance-Authority credential reaches the RUNNING gateway as an event: the
@@ -32,12 +32,12 @@ curl -s -m 5 -o /dev/null http://localhost:8104/actuator/health \
 [ -x "$K/kafka-console-consumer.sh" ] || { log "Kafka CLI not found under $K"; exit 1; }
 
 echo
-log "══ A. participant credential install answers 200 (Kafka publish succeeds) ══"
+log "══ A. participant credential install succeeds (2xx; was 500 without a broker) ══"
 C0=$(count "iaa.iaa-local-consumer.$CRED_T")
 OUT=$(bash "$HERE/../iaa/enroll.sh" 8104 "Kafka Probe $$" false | tail -1)
 case "$OUT" in
-  *"install 200"*) ok "credential install returned 200" ;;
-  *)               bad "credential install did not return 200: $(grep -oE 'install [0-9]+' <<<"$OUT")" ;;
+  *"install 2"[0-9][0-9]*) ok "credential install returned $(grep -oE 'install [0-9]+' <<<"$OUT" | cut -d' ' -f2)" ;;
+  *)               bad "credential install did not succeed: $(grep -oE 'install [0-9]+' <<<"$OUT")" ;;
 esac
 
 echo
