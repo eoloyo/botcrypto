@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Resource footprint of the running mesh: per service RSS, PSS, CPU time, threads, startup time,
+# Resource footprint of the running mesh: per service RSS, PSS, anonymous (dirty) memory, CPU time, threads, startup time,
 # loaded classes and artifact size. Works for JVM and native processes (PID is found from the
 # listening port). Run it after 07 (and the tests you want included in the CPU figure).
 #   Usage: ./14-footprint.sh [label]      -> also writes $LAB_ROOT/run/footprint-<label>.tsv
@@ -33,10 +33,10 @@ def pid_for(inodes):
 def status(pid, key):
     for l in open(f"/proc/{pid}/status"):
         if l.startswith(key + ":"): return int(l.split()[1])
-def pss(pid):
+def rollup(pid, key):
     try:
         for l in open(f"/proc/{pid}/smaps_rollup"):
-            if l.startswith("Pss:"): return int(l.split()[1]) // 1024
+            if l.startswith(key + ":"): return int(l.split()[1]) // 1024
     except OSError: return None
 def cpu(pid):
     f = open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()
@@ -73,19 +73,20 @@ def artifact(cl):
 lis = listen_inodes(); rows = []
 for name, port, main in SVCS:
     pid = pid_for(lis.get(port, set()))
-    if not pid: rows.append((name, port) + (None,) * 8); continue
+    if not pid: rows.append((name, port) + (None,) * 11); continue
     cl = cmdline(pid); kind = "jvm" if cl[0].endswith("java") else "native"
     size, libs = artifact(cl)
-    rows.append((name, port, pid, kind, started(pid, main), status(pid, "VmRSS") // 1024, pss(pid), round(cpu(pid), 1),
+    rows.append((name, port, pid, kind, started(pid, main), status(pid, "VmRSS") // 1024, rollup(pid, "Pss"),
+                 rollup(pid, "Pss_Anon"), round(cpu(pid), 1),
                  status(pid, "Threads"), classes(pid, cl[0]), size, libs))
-hdr = ("service", "port", "pid", "kind", "ready_s", "rss_mb", "pss_mb", "cpu_s", "threads", "classes", "artifact_mb", "lib_jars")
+hdr = ("service", "port", "pid", "kind", "ready_s", "rss_mb", "pss_mb", "anon_mb", "cpu_s", "threads", "classes", "artifact_mb", "lib_jars")
 fmt = lambda v: "-" if v is None else str(v)
 with open(out, "w") as f:
     f.write("\t".join(hdr) + "\n")
     for r in rows: f.write("\t".join(fmt(v) for v in r) + "\n")
-w = [28, 5, 7, 6, 9, 6, 6, 6, 7, 7, 11, 8]
+w = [28, 5, 7, 6, 8, 6, 6, 7, 6, 7, 7, 11, 8]
 print(" ".join(h.ljust(x) for h, x in zip(hdr, w)))
 for r in rows: print(" ".join(fmt(v).ljust(x) for v, x in zip(r, w)))
 tot = lambda i: sum(r[i] for r in rows if isinstance(r[i], (int, float)))
-print(f"TOTAL  RSS {tot(5)} MB   PSS {tot(6)} MB   CPU {tot(7):.1f} s   threads {tot(8)}   (written to {out})")
+print(f"TOTAL  RSS {tot(5)} MB   PSS {tot(6)} MB   anon {tot(7)} MB   CPU {tot(8):.1f} s   threads {tot(9)}   (written to {out})")
 EOF
