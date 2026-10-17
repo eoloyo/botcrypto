@@ -29,6 +29,9 @@ GL="https://code.europa.eu/simpl/simpl-open"
 bg(){ setsid env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy "$@" </dev/null >>"$RUN/mesh.log" 2>&1 & disown 2>/dev/null || true; }
 up(){ curl -sk -o /dev/null "$1" 2>/dev/null; }
 waitup(){ local u="$1" n="${2:-60}"; for _ in $(seq 1 "$n"); do up "$u" && return 0; sleep 2; done; return 1; }
+# The gateway enforces mTLS even on /actuator/health, so an HTTP probe without a client cert
+# can never succeed (waitup would always burn its full timeout). Wait for the TCP listener.
+waittcp(){ local p="$1" n="${2:-60}"; for _ in $(seq 1 "$n"); do (exec 3<>/dev/tcp/127.0.0.1/"$p") 2>/dev/null && return 0; sleep 1; done; return 1; }
 
 # ── 0a. clone every repo this script needs (idempotent) ──────────────────────────────
 mkdir -p "$SRC"
@@ -145,6 +148,7 @@ up http://localhost:8103/actuator/health || bg env JAVA_HOME=$JH java $SIMPL_JAV
 # authentication_provider — GA (:8105, authority) and provider (:8104, participant)
 apboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$(jar "$IAA/authentication_provider")" \
   --spring.profiles.active=$2 --server.port=$1 --server.address="$BACKEND_BIND" \
+  --spring.kafka.producer.properties.max.block.ms=1500 \
   --spring.datasource.url=jdbc:postgresql://localhost:$PG_PORT/$3 \
   --spring.datasource.username=postgres --spring.datasource.password=postgres \
   --spring.data.redis.host=localhost --spring.data.redis.port=30379 --spring.data.redis.username=default --spring.data.redis.password=admin \
@@ -177,7 +181,7 @@ gwboot(){ bg env JAVA_HOME=$JH java $SIMPL_JAVA_OPTS -jar "$GWJAR" --spring.prof
   --federated-catalogue.url=http://localhost:8081 --keypair.algorithm=EC; }
 # (re)start the gateway so it fetches its server identity from the now-credentialed GA
 ps -eo pid,args | grep 'tier2-gateway-local.jar' | grep -v grep | awk '{print $1}' | xargs -r kill 2>/dev/null || true
-sleep 2; gwboot; waitup https://localhost:8443/actuator/health 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
+sleep 2; gwboot; waittcp 8443 60 && log "tier2-gateway up on :8443 (mTLS, GA identity)"
 
 # now the gateway is up, boot the PARTICIPANT auth_provider (:8104) — it hard-depends on
 # the gateway at startup (client.authority.url=https://localhost:8443).
