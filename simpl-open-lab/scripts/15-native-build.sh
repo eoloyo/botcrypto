@@ -110,12 +110,19 @@ EOF
   # Spring's commons-logging (spring-jcl) must be initialized at build time. With jcl-over-slf4j
   # (fc-service) LogFactory is SLF4J's bridge instead: initializing it in the builder freezes SLF4J's
   # NOP provider into the image ("LoggerFactory is not a Logback LoggerContext") — leave it to run time.
+  # Library order as on the JVM (BOOT-INF/classpath.idx), not alphabetical: fc-service's neosemantics
+  # fat jar bundles SLF4J 1.x and sorts before slf4j-api 2.x, which then loses (NOP logger at runtime).
+  if [ -f "$x/BOOT-INF/classpath.idx" ]; then
+    cplibs=$(sed -n 's|^- "\(BOOT-INF/lib/[^"]*\)"$|'"$x"'/\1|p' "$x/BOOT-INF/classpath.idx" | paste -sd:)
+  else
+    cplibs=$(ls "$x"/BOOT-INF/lib/*.jar | paste -sd:)
+  fi
   jclinit="--initialize-at-build-time=org.apache.commons.logging.LogFactory,org.apache.commons.logging.LogFactoryService"
   compgen -G "$x/BOOT-INF/lib/jcl-over-slf4j-*.jar" >/dev/null && jclinit=
   # 3. native-image. Spring AOT's native-image.properties supplies the main class and its flags.
   rm -f "$NATIVE_DIR/bin/$name"
   env -u JAVA_TOOL_OPTIONS JAVA_HOME="$GRAALVM_HOME" "$GRAALVM_HOME/bin/native-image" \
-    -cp "$x:$x/BOOT-INF/classes:$(ls "$x"/BOOT-INF/lib/*.jar | paste -sd:)" --no-fallback -o "$NATIVE_DIR/bin/$name" \
+    -cp "$x:$x/BOOT-INF/classes:$cplibs" --no-fallback -o "$NATIVE_DIR/bin/$name" \
     ${cfg:+-H:ConfigurationFileDirectories=$cfg} \
     $jclinit \
     -H:+ReportExceptionStackTraces ${NATIVE_EXTRA:-} $nativeopts >>"$L" 2>&1
