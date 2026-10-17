@@ -1,0 +1,122 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/AbstractEjbcaSchemaMigration.java b/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/AbstractEjbcaSchemaMigration.java
+index f7eeaef..59465ff 100644
+--- a/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/AbstractEjbcaSchemaMigration.java
++++ b/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/AbstractEjbcaSchemaMigration.java
+@@ -19,7 +19,7 @@ public abstract class AbstractEjbcaSchemaMigration extends AbstractSchemaMigrati
+     }
+ 
+     protected AbstractEjbcaSchemaMigration() {
+-        this(AbstractEjbcaSchemaMigration::createConfigurableApplicationContext);
++        this(AbstractEjbcaSchemaMigration::getConfigurableApplicationContext);
+     }
+ 
+     @Override
+@@ -29,6 +29,11 @@ public abstract class AbstractEjbcaSchemaMigration extends AbstractSchemaMigrati
+         this.ejbcaClient = applicationContext.getBean(EjbcaClient.class);
+     }
+ 
++    private static ConfigurableApplicationContext getConfigurableApplicationContext() {
++        var applicationContext = MainApplicationContextHolder.get();
++        return applicationContext != null ? applicationContext : createConfigurableApplicationContext();
++    }
++
+     private static ConfigurableApplicationContext createConfigurableApplicationContext() {
+         return new SpringApplicationBuilder(EjbcaSpringConfig.class)
+                 .web(WebApplicationType.NONE)
+diff --git a/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/MainApplicationContextHolder.java b/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/MainApplicationContextHolder.java
+new file mode 100644
+index 0000000..473f165
+--- /dev/null
++++ b/src/main/java/eu/europa/ec/simpl/identityprovider/liquibase/MainApplicationContextHolder.java
+@@ -0,0 +1,42 @@
++package eu.europa.ec.simpl.identityprovider.liquibase;
++
++import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
++import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
++import org.springframework.context.ApplicationContext;
++import org.springframework.context.ApplicationContextAware;
++import org.springframework.context.ConfigurableApplicationContext;
++import org.springframework.stereotype.Component;
++
++/**
++ * Exposes the running application context to Liquibase custom changes, which Liquibase
++ * instantiates itself and which therefore cannot be injected. Being a bean factory
++ * post-processor, this bean is created (and handed the context) before any singleton,
++ * so the context is available by the time the Liquibase bean runs the changelog. This
++ * replaces booting a second SpringApplication from inside the first one, which also
++ * cannot work in AOT/native mode.
++ */
++@Component
++public class MainApplicationContextHolder implements BeanFactoryPostProcessor, ApplicationContextAware {
++
++    private static volatile ConfigurableApplicationContext applicationContext;
++
++    @Override
++    public void setApplicationContext(ApplicationContext context) {
++        if (context instanceof ConfigurableApplicationContext configurable) {
++            set(configurable);
++        }
++    }
++
++    @Override
++    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
++        // Nothing to post-process: implemented only so the context is handed over early.
++    }
++
++    static ConfigurableApplicationContext get() {
++        return applicationContext;
++    }
++
++    static void set(ConfigurableApplicationContext context) {
++        applicationContext = context;
++    }
++}
+diff --git a/src/test/java/eu/europa/ec/simpl/identityprovider/liquibase/MainApplicationContextHolderTest.java b/src/test/java/eu/europa/ec/simpl/identityprovider/liquibase/MainApplicationContextHolderTest.java
+new file mode 100644
+index 0000000..3a8b3ac
+--- /dev/null
++++ b/src/test/java/eu/europa/ec/simpl/identityprovider/liquibase/MainApplicationContextHolderTest.java
+@@ -0,0 +1,43 @@
++package eu.europa.ec.simpl.identityprovider.liquibase;
++
++import static org.assertj.core.api.Assertions.assertThat;
++import static org.mockito.Mockito.when;
++
++import eu.europa.ec.simpl.identityprovider.services.EjbcaClient;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.Mock;
++import org.mockito.junit.jupiter.MockitoExtension;
++import org.springframework.context.ConfigurableApplicationContext;
++
++@ExtendWith(MockitoExtension.class)
++class MainApplicationContextHolderTest {
++
++    @Mock
++    private ConfigurableApplicationContext applicationContext;
++
++    @Mock
++    private EjbcaClient ejbcaClient;
++
++    @AfterEach
++    void tearDown() {
++        MainApplicationContextHolder.set(null);
++    }
++
++    @Test
++    void defaultMigrationUsesRunningApplicationContext() {
++        new MainApplicationContextHolder().setApplicationContext(applicationContext);
++        when(applicationContext.getBean(EjbcaClient.class)).thenReturn(ejbcaClient);
++        var migration = new AbstractEjbcaSchemaMigration() {
++            @Override
++            protected void migrateData() {
++                // Do nothing
++            }
++        };
++
++        migration.setUp();
++
++        assertThat(migration.ejbcaClient).isSameAs(ejbcaClient);
++    }
++}

@@ -97,6 +97,7 @@ applypatch(){ # applypatch <repo-dir> <patch-file>
   git -C "$d" apply --reverse --check "$p" 2>/dev/null && return 0   # already applied
   git -C "$d" apply "$p" 2>/dev/null || git -C "$d" apply --3way "$p" 2>/dev/null || \
     { log "WARN: could not apply $(basename "$p")"; return 0; }
+  rm -f "$d"/target/*.jar   # build_one skips services that already have a jar
   log "applied $(basename "$p")"
 }
 # gateway: trust store (loadTrustedCertificates stub) + /fc route to fc-service
@@ -104,6 +105,10 @@ applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-local-trust.patch"
 applypatch "$GW" "$REPO_LAB_DIR/iaa/patches/tier2-gateway-fc-route.patch"
 # auth-provider: make the startup tier-one key-push non-fatal (so :8104 boots on a fresh agent)
 applypatch "$IAA/authentication_provider" "$REPO_LAB_DIR/iaa/patches/authprovider-startup-keypush-nonfatal.patch"
+# identity-provider: the Liquibase EJBCA backfills (AbstractEjbcaSchemaMigration) each booted a
+# second, nested SpringApplication on every start; take EjbcaClient from the running app instead.
+# Also what blocks a GraalVM native image (AOT applies the main initializer to the nested app).
+applypatch "$IAA/identity-provider" "$REPO_LAB_DIR/iaa/patches/identity-provider-liquibase-no-nested-app.patch"
 # sd-tooling-be: add GET /v1/selfDescriptions/discover/{id} — a credential-backed catalogue READ
 # through the Tier-2 gateway (FederatedCatalogueTier2Client.getSelfDescription), so discovery is
 # gated by the same mTLS + ephemeral-proof + ABAC perimeter as publish (see 10-gated-discovery.sh)
