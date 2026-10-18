@@ -39,6 +39,14 @@ build_one() {
     sed -e 's#^RUN curl -LO .*#COPY lab-ca.crt /tmp/lab-ca.crt\nRUN curl --cacert /tmp/lab-ca.crt -fLO "https://dl.k8s.io/release/$(curl --cacert /tmp/lab-ca.crt -fsL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"#' \
       "$d/Dockerfile" > "$d/Dockerfile.lab"; df=Dockerfile.lab
   fi
+  if [ "${LEAN:-0}" = 1 ] && [ -f "$d/pom.xml" ]; then
+    # FOOTPRINT.md: the same vendor and Java version as a runtime-only image, and the jar copied with
+    # its owner instead of `COPY` + `RUN chown` (which stores it twice). Corretto publishes no JRE
+    # image, so tier2-proxy keeps its base and only gets the chown fix.
+    sed -E -e 's#^FROM eclipse-temurin:([0-9]+)-jdk-alpine#FROM eclipse-temurin:\1-jre-alpine#' \
+           -e 's#^COPY (target/[^ ]+) app.jar#COPY --chown=1001 \1 app.jar#' \
+           -e '/^RUN chown 1001 \/app.jar$/d' "$d/$df" > "$d/Dockerfile.lean"; df=Dockerfile.lean
+  fi
   docker build --network host --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" -f "$d/$df" -t "$img" "$d" >>"$L" 2>&1 \
     || { echo "$n: docker build FAILED ($L)"; return 1; }
   local size; size=$(docker image inspect -f '{{.Size}}' "$img" | awk '{printf "%d MB", $1/1048576}')

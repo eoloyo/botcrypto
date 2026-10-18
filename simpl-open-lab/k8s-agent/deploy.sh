@@ -18,7 +18,17 @@ log() { echo "[$(date +%T)] $*"; }
 mkdir -p "$WORK"
 AGENT=("$RENDERED"/out-authority-iaa.yaml
   "$RENDERED"/out-{redis,keycloak,ejbca-community-helm,authentication-provider,identity-provider,onboarding,security-attributes-provider,users-roles,tier1-gateway,tier2-gateway,tier2-proxy}.yaml
-  "$RENDERED"/out-fe-{authentication-provider,identity-provider,onboarding,security-attribute-provider,users-and-roles}.yaml)
+  "$RENDERED"/out-fe-{authentication-provider,identity-provider,onboarding,security-attribute-provider,users-and-roles}.yaml
+  "$RENDERED"/out-init-authority.yaml)
+# The authority's credential bootstrap ("Authority initialization", authority-iaa user manual) is the
+# chart's own init-authority Job, behind development.enableAutomaticInitialization (off in the
+# official values): render just that template with the same values ArgoCD used, plus the switch.
+if [ ! -f "$RENDERED/out-init-authority.yaml" ]; then
+  chart=$(ls -d "$RENDERED"/charts/authority-iaa-*/authority-iaa | head -1)
+  helm template authority-iaa "$chart" -n authority01 -f "$RENDERED/v-authority-iaa-inline.yaml" \
+    --set development.enableAutomaticInitialization=true --show-only templates/init-authority/job.yaml \
+    > "$RENDERED/out-init-authority.yaml"
+fi
 
 # --- 1. lab secrets (what OpenBao holds in the official set-up) -------------------------------
 if [ ! -f "$WORK/secrets.json" ]; then
@@ -112,7 +122,8 @@ EOF
 if [ "${FRESH:-1}" = 1 ]; then
   log "removing any previous agent and resetting Postgres/Kafka"
   K delete ns authority01 --ignore-not-found --wait=true --timeout=300s >/dev/null || true
-  K -n common01 delete pod --all --wait=true >/dev/null 2>&1 || true
+  K -n common01 delete deploy --all --wait=true >/dev/null 2>&1 || true
+  K -n common01 delete pvc --all --wait=true >/dev/null 2>&1 || true
 fi
 K apply -f - < "$HERE/common.yaml" >/dev/null
 docker cp "$WORK/lab-secrets.env" $C:/tmp/lab-secrets.env
