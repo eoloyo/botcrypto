@@ -14,8 +14,12 @@ webhook. Every change is listed here; nothing else in the official manifests is 
     (the images are imported into containerd; code.europa.eu:4567 is unreachable from here);
   * Keycloak's init-spi container copies the two SPI jars from a hostPath instead of downloading
     them from code.europa.eu (pods have no route to the internet here);
-  * CPU *requests* are scaled by CPU_REQUEST_SCALE (default 0.5): the agent requests 6.3 cores and
-    the lab node has 4; limits and memory are left as the charts set them;
+  * CPU *requests* are scaled by CPU_REQUEST_SCALE (default 0.3): the agent requests 6.3 cores and
+    the lab node has 4; limits and memory are left as the charts set them. EJBCA, the start-up
+    critical path (CA set-up, then everything that needs its certificates), gets CRITICAL_CPU
+    (default 1500m) instead, so it wins the CPU while all the JVMs start at once;
+  * EJBCA's set-up container runs ~37 short `ejbca.sh` CLI JVMs: JAVA_OPTS_EJB_CLI (EJBCA's own knob)
+    keeps their defaults and adds C1-only JIT and class-data sharing (12.2 s -> 8.5 s per call);
   * containers with a livenessProbe get a startupProbe (same check, up to STARTUP_GRACE seconds,
     default 900) so the official liveness/readiness probes only start once the container is up:
     under gVisor on 4 cores Keycloak and the Spring services take longer than the charts' fixed
@@ -45,7 +49,12 @@ SIMPL = "code.europa.eu:4567/simpl/"
 is_java = lambda image: image.strip().startswith(SIMPL) and not image.strip().rsplit(":", 1)[0].endswith(("-fe", "ejbca-preconfig"))
 CLUSTER_SCOPED = {"Namespace", "ClusterRole", "ClusterRoleBinding", "StorageClass", "PriorityClass"}
 STARTUP_GRACE = int(os.environ.get("STARTUP_GRACE", "900"))
-CPU_SCALE = float(os.environ.get("CPU_REQUEST_SCALE", "0.5"))
+CPU_SCALE = float(os.environ.get("CPU_REQUEST_SCALE", "0.3"))
+CRITICAL = {"ejbca-community-helm": os.environ.get("CRITICAL_CPU", "1500m")}
+EJBCA_CLI_OPTS = ("-Xms32m -Xmx32m -XX:MetaspaceSize=32M -XX:MaxMetaspaceSize=48m -XX:MaxRAM=80m "
+                  "-XX:ParallelGCThreads=1 -XX:ConcGCThreads=1 -Djava.util.concurrent.ForkJoinPool.common.parallelism=1 "
+                  "-XX:CICompilerCount=2 -Djava.security.egd=file:/dev/random "   # ejbca.sh's defaults
+                  "-XX:TieredStopAtLevel=1 -Xshare:auto")
 VAULT = re.compile(r"vault:\$\{SECRETENGINE\}/data/([^#\s\"]+)#([^\s\"]+)")
 
 
@@ -104,10 +113,12 @@ def main():
                     if "cpu" in req:
                         v = str(req["cpu"])
                         milli = float(v[:-1]) if v.endswith("m") else float(v) * 1000
-                        req["cpu"] = f"{max(1, round(milli * CPU_SCALE))}m"
+                        req["cpu"] = CRITICAL.get(meta["name"]) or f"{max(1, round(milli * CPU_SCALE))}m"
                     if isinstance(c.get("image"), str):
                         c["image"] = c["image"].strip()
                 for c in spec.get("initContainers", []):
+                    if meta["name"] == "ejbca-community-helm":
+                        c.setdefault("env", []).append({"name": "JAVA_OPTS_EJB_CLI", "value": EJBCA_CLI_OPTS})
                     if c["name"] == "init-spi":
                         c["command"] = ["/bin/sh", "-c"]
                         c["args"] = ["cp /spi-src/*.jar /custom-spi/ && ls -l /custom-spi"]
