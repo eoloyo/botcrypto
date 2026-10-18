@@ -140,5 +140,16 @@ log "applying $(grep -c '^kind:' "$WORK/agent.yaml") objects"
 t0=$(date +%s)
 K apply -f - < "$WORK/agent.yaml" 2>&1 | grep -vE 'created|configured|unchanged' || true
 
+# identity-provider mounts the secret EJBCA's set-up writes (~9 min in on a fresh install); the kubelet
+# retries a missing secret with a growing backoff (81 s measured), so restart the pod as soon as it exists
+( for _ in $(seq 1 480); do
+    if K -n authority01 get secret ejbca-rest-api-secret >/dev/null 2>&1; then
+      K -n authority01 get pods -l app.kubernetes.io/name=identity-provider --no-headers 2>/dev/null |
+        grep -q ContainerCreating && K -n authority01 delete pod -l app.kubernetes.io/name=identity-provider --wait=false >/dev/null
+      break
+    fi
+    sleep 5
+  done ) &
+
 # --- 6. timeline: seconds from apply until each pod is Ready ----------------------------------
 "$HERE/observe.sh" "$t0"
