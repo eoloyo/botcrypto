@@ -19,6 +19,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="${WORK:-/tmp/k8s-gvisor}"
 K3S_IMAGE="${K3S_IMAGE:-rancher/k3s:v1.30.6-k3s1}"
 CONTAINER="${CONTAINER:-k3s-gvisor}"
+# Extra k3s server args, e.g. K3S_EXTRA_ARGS="--kubelet-arg=eviction-hard=nodefs.available<1%,imagefs.available<1%"
+# where the sandbox reports a huge filesystem with little of it available (disk-pressure taint).
 mkdir -p "$WORK"
 
 log() { echo -e "\033[1;34m[k8s-gvisor]\033[0m $*"; }
@@ -69,7 +71,7 @@ docker run -d --name "$CONTAINER" --privileged --tmpfs /run --tmpfs /var/run \
   -v "$WORK/runsc.patched:/usr/local/bin/runsc:ro" \
   -v "$SIDECAR_DIR:/usr/local/bin/gvisor-bin:ro" \
   -v "$WORK/containerd-shim-runsc-v1.patched:/usr/local/bin/containerd-shim-runsc-v1:ro" \
-  "$K3S_IMAGE" server --disable traefik,servicelb,metrics-server >/dev/null
+  "$K3S_IMAGE" server --disable traefik,servicelb,metrics-server ${K3S_EXTRA_ARGS:-} >/dev/null
 
 K() { docker exec "$CONTAINER" kubectl "$@"; }
 
