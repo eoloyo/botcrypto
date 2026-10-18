@@ -49,6 +49,11 @@ build_one() {
       docker image inspect "keyfactor/ejbca-ce:${EJBCA_BASE}" >/dev/null 2>&1 || {
         docker pull -q "mirror.gcr.io/keyfactor/ejbca-ce:${EJBCA_BASE}" >/dev/null &&
         docker tag "mirror.gcr.io/keyfactor/ejbca-ce:${EJBCA_BASE}" "keyfactor/ejbca-ce:${EJBCA_BASE}"; }
+      # EJBCA 9's `ca init` asks for the crypto token's password even for an existing, auto-activated
+      # token (EJBCA 8 did not) and fails without a console: pass the PIN the script gave the token
+      sed -E 's#^( +)--tokenName (Simpl[A-Za-z]*CryptoToken) \\$#\1--tokenName \2 \\\n\1--tokenPass 987654321 \\#' \
+        "$d/entrypoint.sh" > "$d/entrypoint.lab.sh"
+      sed -i 's#^COPY --chmod=755 entrypoint.sh entrypoint.sh#COPY --chmod=755 entrypoint.lab.sh entrypoint.sh#' "$d/Dockerfile.lab"
       img="$img-ejbca${EJBCA_BASE}"
     fi
   fi
