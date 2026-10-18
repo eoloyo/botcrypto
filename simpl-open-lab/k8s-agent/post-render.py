@@ -20,6 +20,12 @@ webhook. Every change is listed here; nothing else in the official manifests is 
     default 900) so the official liveness/readiness probes only start once the container is up:
     under gVisor on 4 cores Keycloak and the Spring services take longer than the charts' fixed
     initialDelaySeconds, and the liveness probe kills them mid-start;
+  * authentication-provider's create-secret Job builds its AES key with `openssl rand` inside the
+    unpinned alpine/kubectl:latest image, which no longer ships openssl: the secret is created with
+    an empty key and the service fails (CRYPTO_SECRETKEYBASE64 must not be blank). The key is made
+    with /dev/urandom and base64 instead (upstream defect);
+  * with LAB_PKI set (deploy.sh), adds the lab edge that stands in for the ingress controller and
+    gives the Simpl Java services a truststore with the lab CA; see edge.py;
   * adds the `redis-secrets` Secret (key `redis`) that the redis chart and the services read but no
     chart creates (in the official set-up it is provisioned alongside the OpenBao secrets);
   * puts namespaced objects without a namespace into authority01 (ArgoCD's destination namespace).
@@ -32,6 +38,11 @@ import sys
 
 import yaml
 
+import edge
+
+PKI = os.environ.get("LAB_PKI")
+SIMPL = "code.europa.eu:4567/simpl/"
+is_java = lambda image: image.strip().startswith(SIMPL) and not image.strip().rsplit(":", 1)[0].endswith(("-fe", "ejbca-preconfig"))
 CLUSTER_SCOPED = {"Namespace", "ClusterRole", "ClusterRoleBinding", "StorageClass", "PriorityClass"}
 STARTUP_GRACE = int(os.environ.get("STARTUP_GRACE", "900"))
 CPU_SCALE = float(os.environ.get("CPU_REQUEST_SCALE", "0.5"))
@@ -56,11 +67,12 @@ def main():
             sys.exit(f"no lab value for {key}")
         return secrets[key]
 
-    out = []
+    out, docs = [], []
     for path in sys.argv[2:]:
         for doc in yaml.safe_load_all(open(path)):
             if not doc or doc.get("kind") == "Application":
                 continue
+            docs.append(doc)
             meta = doc.setdefault("metadata", {})
             if doc["kind"] not in CLUSTER_SCOPED and not meta.get("namespace"):
                 meta["namespace"] = "authority01"
@@ -74,6 +86,13 @@ def main():
             spec = pod_spec(doc)
             if spec is not None:
                 spec["runtimeClassName"] = "runsc"
+                if PKI:
+                    edge.trust(spec, is_java)
+                for c in spec.get("containers", []):
+                    for field in ("command", "args"):
+                        if c.get(field):
+                            c[field] = [x.replace("$(openssl rand -base64 32)", "$(head -c 32 /dev/urandom | base64)")
+                                        for x in c[field]]
                 for c in spec.get("initContainers", []) + spec.get("containers", []):
                     c["imagePullPolicy"] = "IfNotPresent"
                     live = c.get("livenessProbe")
@@ -99,6 +118,8 @@ def main():
     out.append(yaml.safe_dump({"apiVersion": "v1", "kind": "Secret",
                                "metadata": {"name": "redis-secrets", "namespace": "authority01"},
                                "stringData": {"redis": secrets["lab#redis"]}}, sort_keys=False))
+    if PKI:
+        out += [yaml.safe_dump(o, sort_keys=False, width=1 << 20) for o in edge.objects(docs, PKI)]
     sys.stdout.write("---\n".join(out))
 
 

@@ -47,9 +47,27 @@ if "lab#redis" not in s:
     s["lab#redis"] = secrets.token_hex(16); json.dump(s, open(sys.argv[1], "w"), indent=1)
 EOF
 
+# --- 1b. lab PKI for the edge that stands in for the ingress controller (edge.py) ----------------
+PKI="$WORK/pki"
+if [ ! -f "$PKI/truststore.jks" ]; then
+  mkdir -p "$PKI" && chmod 700 "$PKI"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=simpl-lab-ca" \
+    -keyout "$PKI/ca.key" -out "$PKI/ca.crt" 2>/dev/null
+  openssl req -newkey rsa:2048 -nodes -subj "/CN=authority01.example.com" \
+    -keyout "$PKI/edge.key" -out "$PKI/edge.csr" 2>/dev/null
+  printf 'subjectAltName=DNS:*.authority01.example.com,DNS:authority.be.authority01.example.com,DNS:authority.fe.authority01.example.com\n' > "$PKI/san.ext"
+  openssl x509 -req -in "$PKI/edge.csr" -CA "$PKI/ca.crt" -CAkey "$PKI/ca.key" -CAcreateserial -days 365 \
+    -extfile "$PKI/san.ext" -out "$PKI/edge.crt" 2>/dev/null
+  # the JDK's public CAs plus the lab CA
+  keytool -importkeystore -srckeystore "$(readlink -f "$(command -v keytool)" | sed 's#/bin/keytool##')/lib/security/cacerts" \
+    -srcstorepass changeit -destkeystore "$PKI/truststore.jks" -deststoretype JKS -deststorepass changeit -noprompt >/dev/null 2>&1
+  keytool -importcert -alias simpl-lab-ca -file "$PKI/ca.crt" -keystore "$PKI/truststore.jks" -storepass changeit -noprompt >/dev/null
+fi
+export LAB_PKI="$PKI"
+
 # --- 2. images into the cluster's containerd (one stream, shared layers sent once) -------------
 mapfile -t IMAGES < <(grep -ohE '^\s+image:\s*"?[^" ]+' "${AGENT[@]}" | sed -E 's/.*image:\s*"?//' | sort -u)
-IMAGES+=(postgres:16-alpine apache/kafka:3.8.1 alpine/kubectl:latest rancher/mirrored-library-busybox:1.36.1)   # lab: alpine:3.20 retagged (ECR quota)   # the Job puts its image on the next line
+IMAGES+=(postgres:16-alpine apache/kafka:3.8.1 alpine/kubectl:latest rancher/mirrored-library-busybox:1.36.1 nginxinc/nginx-unprivileged:alpine3.22-perl)   # lab: alpine:3.20 retagged (ECR quota)   # the Job puts its image on the next line
 have=$(docker exec $C ctr -n k8s.io images ls -q)
 missing=(); absent=(); for i in "${IMAGES[@]}"; do
   ref=${i#docker.io/}; [[ ${ref##*/} == *:* ]] || ref=$ref:latest      # containerd's normalised name
@@ -74,6 +92,10 @@ cm = json.load(sys.stdin); pod = yaml.safe_load(cm["data"]["helperPod.yaml"])
 pod["spec"]["runtimeClassName"] = "runsc"; cm["data"]["helperPod.yaml"] = yaml.safe_dump(pod)
 json.dump(cm, sys.stdout)' | K apply -f - | grep -q configured &&   # the provisioner reads the template only at start
   { K -n kube-system rollout restart deploy/local-path-provisioner >/dev/null; K -n kube-system rollout status deploy/local-path-provisioner --timeout=120s >/dev/null; }
+# the agent's public names resolve to the lab edge (edge.py) instead of an ingress controller
+K -n kube-system create configmap coredns-custom --dry-run=client -o yaml \
+  --from-literal=lab.override='rewrite name regex (.*)\.authority01\.example\.com edge.authority01.svc.cluster.local answer auto' |
+  K apply -f - | grep -q -E 'created|configured' && K -n kube-system rollout restart deploy/coredns >/dev/null
 docker exec $C mkdir -p /var/lib/simpl-spi
 docker cp "$SPI_DIR/keycloak-authenticator.jar" $C:/var/lib/simpl-spi/
 docker cp "$SPI_DIR/keycloak-eidas-demo-authenticator.jar" $C:/var/lib/simpl-spi/
