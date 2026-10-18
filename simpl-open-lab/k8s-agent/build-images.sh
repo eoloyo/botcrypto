@@ -47,6 +47,7 @@ build_one() {
   docker rmi "$img" >/dev/null
   rm -rf "${d:?}/node_modules" "${d:?}/target" "${d:?}/dist"
   [ -f "$d/package.json" ] && yarn cache clean >/dev/null 2>&1
+  docker builder prune -af >/dev/null   # BuildKit keeps every layer it built (10 GB after a full run)
   echo "$n:$tag OK in $(( $(date +%s) - t0 ))s ($size)"
 }
 
