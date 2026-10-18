@@ -1,0 +1,14 @@
+simpl/simpl-open/development/iaa/authentication_provider 2.16.6
+simpl/simpl-open/development/iaa/ejbca-preconfig 1.0.3
+simpl/simpl-open/security/access-control-and-trust/authentication-provider-federation/authentication-provider/authentication-provider-fe 2.10.6
+simpl/simpl-open/security/access-control-and-trust/identity-provider-federation/identity-provider/identity-provider-fe 2.11.15
+simpl/simpl-open/governance/participant-management/onboarding/onboarding/onboarding-fe 2.13.6
+simpl/simpl-open/security/access-control-and-trust/security-attribute-provider-federation/security-attributes-provider/security-attribute-provider-fe 2.10.3
+simpl/simpl-open/governance/participant-management/user-roles/user-roles/users-roles-fe 2.13.7
+simpl/simpl-open/security/access-control-and-trust/identity-provider-federation/identity-provider/identity-provider-be 2.16.7
+simpl/simpl-open/governance/participant-management/onboarding/onboarding/onboarding-be 2.13.4
+simpl/simpl-open/development/iaa/security-attributes-provider 2.13.3
+simpl/simpl-open/development/iaa/tier1-gateway 2.14.4
+simpl/simpl-open/development/iaa/tier2-gateway 2.12.3
+simpl/simpl-open/development/iaa/tier2-proxy 1.6.5
+simpl/simpl-open/governance/participant-management/user-roles/user-roles/users-roles-be 2.13.5
