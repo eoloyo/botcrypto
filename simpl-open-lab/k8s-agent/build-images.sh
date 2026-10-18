@@ -22,7 +22,7 @@ build_one() {
     # the compile step the projects' CI runs before `docker build`
     ( cd "$d" && env -u JAVA_TOOL_OPTIONS -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy PROJECT_RELEASE_VERSION="$tag" mvn -B -ntp -DskipTests \
         -Dspotless.check.skip=true -Dspotless.apply.skip=true -Dlicense.skip=true -Dcheckstyle.skip=true \
-        -Dmaven.javadoc.skip=true -Djacoco.skip=true package ) >"$L" 2>&1 || { echo "$n: maven FAILED ($L)"; return 1; }
+        -Dmaven.javadoc.skip=true -Djacoco.skip=true clean package ) >"$L" 2>&1 || { echo "$n: maven FAILED ($L)"; return 1; }
   elif [ -f "$d/package.json" ]; then
     # CI uses yarn (pipeline.variables.sh: JS_PACKAGE_MANAGER=yarn); there is no lockfile, and npm's
     # strict peer-dependency resolution rejects the tree (ERESOLVE) where yarn 1 only warns.
