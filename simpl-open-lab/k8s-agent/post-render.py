@@ -31,6 +31,8 @@ webhook. Every change is listed here; nothing else in the official manifests is 
     with /dev/urandom and base64 instead (upstream defect);
   * with LAB_PKI set (deploy.sh), adds the lab edge that stands in for the ingress controller and
     gives the Simpl Java services a truststore with the lab CA; see edge.py;
+  * EJBCA_RELEASE (e.g. 9.6.3) swaps EJBCA for another keyfactor/ejbca-ce release, with Simpl's
+    ejbca-preconfig rebuilt on it (build-images.sh EJBCA_BASE); unset = the chart's 8.2.0.1;
   * adds the `redis-secrets` Secret (key `redis`) that the redis chart and the services read but no
     chart creates (in the official set-up it is provisioned alongside the OpenBao secrets);
   * puts namespaced objects without a namespace into authority01 (ArgoCD's destination namespace).
@@ -50,6 +52,7 @@ SIMPL = "code.europa.eu:4567/simpl/"
 is_java = lambda image: image.strip().startswith(SIMPL) and not image.strip().rsplit(":", 1)[0].endswith(("-fe", "ejbca-preconfig"))
 CLUSTER_SCOPED = {"Namespace", "ClusterRole", "ClusterRoleBinding", "StorageClass", "PriorityClass"}
 STARTUP_GRACE = int(os.environ.get("STARTUP_GRACE", "900"))
+EJBCA_RELEASE = os.environ.get("EJBCA_RELEASE")
 CPU_SCALE = float(os.environ.get("CPU_REQUEST_SCALE", "0.3"))
 CRITICAL = {"ejbca-community-helm": os.environ.get("CRITICAL_CPU", "1500m")}
 EJBCA_CLI_OPTS = ("-Xms32m -Xmx32m -XX:MetaspaceSize=32M -XX:MaxMetaspaceSize=48m -XX:MaxRAM=80m "
@@ -123,6 +126,11 @@ def main():
                             req["cpu"] = f"{max(1, round(milli * CPU_SCALE))}m"
                     if isinstance(c.get("image"), str):
                         c["image"] = c["image"].strip()
+                        if EJBCA_RELEASE and meta["name"] == "ejbca-community-helm":
+                            if c["image"].startswith("keyfactor/ejbca-ce:"):
+                                c["image"] = f"keyfactor/ejbca-ce:{EJBCA_RELEASE}"
+                            elif "/ejbca-preconfig:" in c["image"]:
+                                c["image"] += f"-ejbca{EJBCA_RELEASE}"
                 for c in spec.get("initContainers", []):
                     if meta["name"] == "ejbca-community-helm":
                         c.setdefault("env", []).append({"name": "JAVA_OPTS_EJB_CLI", "value": EJBCA_CLI_OPTS})

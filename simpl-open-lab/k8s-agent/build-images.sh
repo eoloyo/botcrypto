@@ -33,11 +33,24 @@ build_one() {
   fi
   local df=Dockerfile
   if [ "$n" = ejbca-preconfig ]; then
-    # its Dockerfile downloads kubectl (the *latest* stable release) during the build: give that curl
-    # the sandbox proxy and its CA
-    cp /root/.ccr/ca-bundle.crt "$d/lab-ca.crt"
-    sed -e 's#^RUN curl -LO .*#COPY lab-ca.crt /tmp/lab-ca.crt\nRUN curl --cacert /tmp/lab-ca.crt -fLO "https://dl.k8s.io/release/$(curl --cacert /tmp/lab-ca.crt -fsL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"#' \
-      "$d/Dockerfile" > "$d/Dockerfile.lab"; df=Dockerfile.lab
+    # the kubectl the Dockerfile downloads (the *latest* stable release): dl.k8s.io is not reliably reachable through the sandbox
+    # proxy, so take the binary from the ejbca-preconfig image already in the cluster when there is one
+    if [ -n "${EJBCA_BASE:-}" ] && docker exec $C ctr -n k8s.io run --rm "$img" kcopy cat /bin/kubectl > "$d/kubectl" 2>/dev/null \
+        && [ -s "$d/kubectl" ]; then :
+    else
+      curl -fsSL -o "$d/kubectl" "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+        || { echo "$n: kubectl download FAILED"; return 1; }
+    fi
+    sed -e 's#^RUN curl -LO .*#COPY kubectl kubectl#' "$d/Dockerfile" > "$d/Dockerfile.lab"; df=Dockerfile.lab
+    # EJBCA_BASE=<keyfactor/ejbca-ce tag>: the same set-up on another EJBCA release (EJBCA.md),
+    # tagged <version>-ejbca<release> so the official pair stays in the cluster
+    if [ -n "${EJBCA_BASE:-}" ]; then
+      sed -i "s#^FROM keyfactor/ejbca-ce:.*#FROM keyfactor/ejbca-ce:${EJBCA_BASE}#" "$d/Dockerfile.lab"
+      docker image inspect "keyfactor/ejbca-ce:${EJBCA_BASE}" >/dev/null 2>&1 || {
+        docker pull -q "mirror.gcr.io/keyfactor/ejbca-ce:${EJBCA_BASE}" >/dev/null &&
+        docker tag "mirror.gcr.io/keyfactor/ejbca-ce:${EJBCA_BASE}" "keyfactor/ejbca-ce:${EJBCA_BASE}"; }
+      img="$img-ejbca${EJBCA_BASE}"
+    fi
   fi
   if [ "${LEAN:-0}" = 1 ] && [ -f "$d/pom.xml" ]; then
     # FOOTPRINT.md: the same vendor and Java version as a runtime-only image, and the jar copied with
