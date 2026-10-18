@@ -141,19 +141,4 @@ t0=$(date +%s)
 K apply -f - < "$WORK/agent.yaml" 2>&1 | grep -vE 'created|configured|unchanged' || true
 
 # --- 6. timeline: seconds from apply until each pod is Ready ----------------------------------
-: > "$WORK/timeline.tsv"
-declare -A seen
-deadline=$(( t0 + ${TIMEOUT:-2400} ))
-while [ "$(date +%s)" -lt $deadline ]; do
-  while read -r name ready status restarts; do
-    [ -n "${seen[$name]:-}" ] && continue
-    if [ "${ready%/*}" = "${ready#*/}" ] && [ "$status" = Running ]; then
-      seen[$name]=1; printf '%s\t%d\t%s\n' "$name" $(( $(date +%s) - t0 )) "$restarts" | tee -a "$WORK/timeline.tsv"
-    fi
-  done < <(K -n authority01 get pods --no-headers 2>/dev/null | awk '$3!="Completed"{print $1, $2, $3, $4}')
-  notready=$(K -n authority01 get pods --no-headers 2>/dev/null | awk '$3!="Completed"{split($2,a,"/"); if(a[1]!=a[2]||$3!="Running") n++} END{print n+0}')
-  [ "$notready" = 0 ] && [ ${#seen[@]} -gt 0 ] && break
-  sleep 5
-done
-log "done after $(( $(date +%s) - t0 ))s; not ready:"
-K -n authority01 get pods --no-headers | awk '{split($2,a,"/"); if(a[1]!=a[2]&&$3!="Completed") print}'
+"$HERE/observe.sh" "$t0"
