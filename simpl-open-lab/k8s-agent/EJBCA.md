@@ -81,3 +81,32 @@ Partly, and it would not fix the slowness on its own:
 | `ejbca-preconfig`: check "already bootstrapped" without booting the server (e.g. a marker on the persistent volume, or the database) | ~1½ min on every start | a change to Simpl's set-up image |
 | `ejbca-preconfig`: run the set-up as a Job against the running EJBCA (REST / one CLI session) instead of a second server in an init container | one server boot on first install | a change to Simpl's set-up design |
 | EJBCA 9.x on a newer JDK with class-data sharing, unused web apps left out | faster boot; needs measuring | a different EJBCA version; the container layer must be rebuilt |
+
+## Tried: EJBCA 9.6.3 (`keyfactor/ejbca-ce:9.6.3`)
+
+The latest Keyfactor image (Sep 2026): OpenJDK 21, WildFly 39.0.1, AlmaLinux 9.7, the same 12 web apps,
+and the same container scripts and paths. Simpl's `ejbca-preconfig` was rebuilt on it
+(`build-images.sh EJBCA_BASE=9.6.3`, deployed with `EJBCA_RELEASE=9.6.3`; the official 8.2.0.1
+pair stays in the cluster). Docker Hub rate-limits this sandbox; `mirror.gcr.io` serves the image.
+
+**One incompatibility in Simpl's set-up.** EJBCA 9's `ca init` asks for the crypto token's password
+even for the existing, auto-activated token the script creates first; EJBCA 8 did not. In a container
+it throws (`System.console()` is null), so SimplCA and OnBoardingCA were never created and every later
+`ca editca` failed. Passing `--tokenPass` with the PIN the script already gives the tokens fixes it.
+Nothing else in the set-up, nor the REST API identity-provider uses, needed changing: the authority's
+initialization (keypair, CSR, participant, credential issued by EJBCA 9, credential installed) and
+tier2 all worked.
+
+| | 8.2.0.1 | 9.6.3 |
+|---|---|---|
+| Fresh install, whole agent (runs 3 / 4) | 912 s | 910 s |
+| EJBCA set-up done (secret written) | 546 s | 577 s |
+| EJBCA alone restarted on an idle node | 259 s | **232 s** |
+| … of which TLS certificate reissue | 107 s | 82 s |
+| CPU to install (fresh) | 1118 CPU-s | 985 CPU-s |
+| Working set | 692 MiB | **877 MiB** |
+
+**Verdict:** a newer EJBCA is not the fix. It is ~10% faster to restart (its CLI JVMs start faster on
+Java 21), no faster to install, and uses ~27% more memory. Its time goes to the same places: one JVM
+per CLI call, the TLS reissue on every start, and two server boots per pod start. Those are fixed by the
+persistent TLS volume and the `ejbca-preconfig` changes above, on either version.
