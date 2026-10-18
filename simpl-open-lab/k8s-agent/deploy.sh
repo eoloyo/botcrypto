@@ -72,7 +72,8 @@ K -n kube-system get cm local-path-config -o json | python3 -c '
 import json, sys, yaml
 cm = json.load(sys.stdin); pod = yaml.safe_load(cm["data"]["helperPod.yaml"])
 pod["spec"]["runtimeClassName"] = "runsc"; cm["data"]["helperPod.yaml"] = yaml.safe_dump(pod)
-json.dump(cm, sys.stdout)' | K apply -f - >/dev/null
+json.dump(cm, sys.stdout)' | K apply -f - | grep -q configured &&   # the provisioner reads the template only at start
+  { K -n kube-system rollout restart deploy/local-path-provisioner >/dev/null; K -n kube-system rollout status deploy/local-path-provisioner --timeout=120s >/dev/null; }
 docker exec $C mkdir -p /var/lib/simpl-spi
 docker cp "$SPI_DIR/keycloak-authenticator.jar" $C:/var/lib/simpl-spi/
 docker cp "$SPI_DIR/keycloak-eidas-demo-authenticator.jar" $C:/var/lib/simpl-spi/
