@@ -41,7 +41,9 @@ for r in csv.DictReader(open(samples), delimiter="\t"):
     series[key][t] = int(r["cpu_ns"] or 0)
 times = sorted({t for s in series.values() for t in s})
 end = times[-1]
-base = {k: s[min(s)] for k, s in series.items() if k in ("k3s-container", "kubepods")}
+# series present in the first sample existed before t0 (old pods of a restart, Postgres, Kafka, the
+# totals): count them from that sample, not from zero
+base = {k: s[min(s)] for k, s in series.items() if min(s) == times[0]}
 
 
 def used(key, a, b):
