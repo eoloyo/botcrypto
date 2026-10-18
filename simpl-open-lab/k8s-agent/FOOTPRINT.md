@@ -26,6 +26,9 @@ after start-up had settled.
 | tier2-proxy | 1023 | 0 | 311 | 1024 | 27 |
 | tier2-gateway | 1062 | 0 | 549 | 1024 | 71 |
 | _common: Kafka / Postgres_ | | | 503 / 227 | 1024 / – | 113 / 122 |
+
+With the `LEAN=1` images (run 3) each Java service used 5–13% less (e.g. identity-provider 524 → 489,
+tier2-gateway 549 → 480 MiB); the agent plus common components 6386 → 6053 MiB.
 | **Total (agent + common)** | | | **6386** | **13932** | |
 
 - Requests total 13.9 GB of memory for 6.4 GB used. The front-ends request 512 MiB each and use 11.
@@ -33,6 +36,48 @@ after start-up had settled.
   first-time CA setup) → identity-provider (needs EJBCA's client certificate) → the init Job → tier2.
 - The restarts are start-order effects the charts don't express: users-roles' migration needs
   Keycloak; Keycloak timed out on its first schema migration while every JVM was starting.
+
+## Start-up time
+
+| Run | What changed | All Ready |
+|---|---|---|
+| 2 | official images, CPU requests × 0.5 | 1062 s (17.7 min) |
+| 3 | `LEAN=1` images; EJBCA weighted for CPU; fast EJBCA CLI JVMs | **912 s (15.2 min)** |
+| warm restart | all agent pods deleted, Postgres/Kafka and their data kept | **437 s (7.3 min)**; every service up by ~370 s, EJBCA last |
+
+The warm-restart figure is measured from the start of the delete (controllers recreate pods while
+the rest are still terminating); `restart.sh` now takes its t0 there too.
+
+**The critical path of a first install is EJBCA**, then everything that needs its certificates:
+
+| EJBCA phase | Run 2 | Run 3 |
+|---|---|---|
+| WildFly boot inside the set-up container | 4.0 min | 2.9 min |
+| EJBCA creates its ManagementCA (RSA 3072) and super admin | 3.3 min | 2.75 min |
+| CA configuration: ~37 `ejbca.sh` CLI calls, each a new JVM | 4.4 min | 3.4 min |
+| second WildFly boot in the main container | 3.0 min | 2.8 min |
+| **EJBCA total** | **15 min** | **11.8 min** |
+
+After that (run 3): identity-provider waited 81 s for the kubelet to retry the secret EJBCA had just
+written (now nudged by `deploy.sh`), booted in 126 s; the init Job's eight calls took ~60 s; tier2
+started 25–83 s after the credential existed.
+
+What helped, and what it costs:
+
+- **CPU weighted to the critical path.** Under contention CPU is shared by `cpu.shares`, i.e. by request.
+  EJBCA's request goes to its chart limit (500m), the rest are scaled by 0.3, so EJBCA gets ~3x the share of
+  each other service. Only scheduling changes.
+- **Faster CLI JVMs in EJBCA's set-up container** via EJBCA's own `JAVA_OPTS_EJB_CLI`: its defaults plus
+  C1-only JIT, 12.2 s → 8.5 s per call. The set-up container is throwaway; the server keeps its settings.
+- **Not done:** C1-only for the set-up container's *server* boot. The same server generates the
+  RSA keys, which C1 would slow down; class-data sharing is already on by default.
+- **Not changed:** EJBCA's two boots and its 3072-bit ManagementCA are how the official image and
+  `ejbca-preconfig` work; shortening them means changing either.
+
+**CPU limits are not enforced in this lab** (`cpu.cfs_quota_us` is -1: runsc keeps the sandbox in the
+pod cgroup, where only `cpu.shares` applies). On a cluster that enforces them, the chart's 500m limit
+on EJBCA caps its first-install bootstrap, which used ~1400 CPU-seconds here; that is likely a
+start-up bottleneck in the official deployment too (gVisor inflates CPU time, so the real figure is lower).
 
 ## Images
 
@@ -57,6 +102,10 @@ The lean tier1-gateway was swapped into the running agent: Ready in 126 s, `/act
 `/auth` route to Keycloak both 200 through the edge, working set 361 MiB (official pod: 422 MiB, but
 it had served the initialization traffic, so the difference is indicative only). It was rolled back
 afterwards; the official images stay the default.
+
+All eight back-ends with `LEAN=1`: authentication-provider 1069 → 544, identity-provider 940 → 479,
+onboarding 1064 → 541, security-attributes-provider 973 → 496, tier1-gateway 848 → 433,
+tier2-gateway 943 → 481, tier2-proxy 723 → 620 (`--chown` only) MiB.
 
 `build-images.sh` does this with `LEAN=1` and keeps the official image names, so the charts are
 unchanged. Corretto publishes no JRE image, so tier2-proxy only gets the `--chown` fix.

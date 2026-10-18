@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # observe.sh <t0 epoch seconds> — the deploy timeline: seconds from the apply at t0 until each pod in
-# authority01 is Ready, written to $WORK/timeline.tsv. deploy.sh runs it after applying; run it by
+# authority01 is Ready, written to $WORK/timeline.tsv. Only pods created at or after t0 count, so a
+# restart can take t0 before deleting the old pods (StatefulSet pods keep their names). deploy.sh runs it after applying; run it by
 # itself to resume a timeline whose observer died, with the original apply time.
 set -uo pipefail
 t0=${1:?t0}
@@ -14,7 +15,19 @@ log() { echo "[$(date +%T)] $*"; }
 declare -A seen
 deadline=$(( t0 + ${TIMEOUT:-2400} ))
 while [ "$(date +%s)" -lt $deadline ]; do
-  if ! pods=$(K -n authority01 get pods --no-headers 2>/dev/null) || [ -z "$pods" ]; then
+  if ! pods=$(K -n authority01 get pods -o json 2>/dev/null | python3 -c '
+import json, sys
+from datetime import datetime
+t0 = int(sys.argv[1])
+for p in json.load(sys.stdin)["items"]:
+    if datetime.fromisoformat(p["metadata"]["creationTimestamp"].replace("Z", "+00:00")).timestamp() < t0 - 1:
+        continue
+    cs = p["status"].get("containerStatuses") or []
+    ready = sum(1 for c in cs if c.get("ready"))
+    phase = "Completed" if p["status"].get("phase") == "Succeeded" else ("Running" if p["status"].get("phase") == "Running" else p["status"].get("phase"))
+    n = len(p["spec"]["containers"])
+    print(p["metadata"]["name"], f"{ready}/{n}", phase, sum(c.get("restartCount", 0) for c in cs))
+' "$t0") || [ -z "$pods" ]; then
     [ "$(docker inspect -f '{{.State.Running}}' $C)" = true ] || log "the cluster container is not running"
     sleep 5; continue
   fi

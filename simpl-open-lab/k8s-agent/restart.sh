@@ -7,8 +7,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 C=k3s-gvisor
 K() { docker exec -i $C kubectl "$@"; }
-echo "[$(date +%T)] deleting all agent pods"
-K -n authority01 delete pod --all --wait=true --timeout=300s >/dev/null
-t0=$(date +%s)
-echo "[$(date +%T)] all pods deleted; timing the restart"
+t0=$(date +%s)   # before the delete: controllers recreate pods while the others are still terminating
+echo "[$(date +%T)] deleting all agent pods; timing from now"
+K -n authority01 delete pod --all --wait=false >/dev/null
 "$HERE/observe.sh" "$t0"
