@@ -26,7 +26,9 @@ build_one() {
   elif [ -f "$d/package.json" ]; then
     # CI uses yarn (pipeline.variables.sh: JS_PACKAGE_MANAGER=yarn); there is no lockfile, and npm's
     # strict peer-dependency resolution rejects the tree (ERESOLVE) where yarn 1 only warns.
-    ( cd "$d" && yarn install --non-interactive --network-timeout 600000 && yarn build ) >"$L" 2>&1 \
+    # registry.npmjs.org is reached directly; registry.yarnpkg.com (yarn's default) goes through the
+    # sandbox egress proxy, which drops long transfers
+    ( cd "$d" && export YARN_REGISTRY=https://registry.npmjs.org && yarn cache clean && rm -rf node_modules && yarn install --non-interactive --network-timeout 600000 && yarn build ) >"$L" 2>&1 \
       || { echo "$n: yarn FAILED ($L)"; return 1; }
   fi
   local df=Dockerfile
