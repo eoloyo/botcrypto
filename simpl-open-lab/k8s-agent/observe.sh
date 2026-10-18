@@ -14,7 +14,10 @@ log() { echo "[$(date +%T)] $*"; }
 declare -A seen
 deadline=$(( t0 + ${TIMEOUT:-2400} ))
 while [ "$(date +%s)" -lt $deadline ]; do
-  if ! pods=$(K -n authority01 get pods --no-headers 2>/dev/null) || [ -z "$pods" ]; then sleep 5; continue; fi
+  if ! pods=$(K -n authority01 get pods --no-headers 2>/dev/null) || [ -z "$pods" ]; then
+    [ "$(docker inspect -f '{{.State.Running}}' $C)" = true ] || log "the cluster container is not running"
+    sleep 5; continue
+  fi
   while read -r name ready status restarts; do
     [ -n "${seen[$name]:-}" ] && continue
     if [ "${ready%/*}" = "${ready#*/}" ] && [ "$status" = Running ]; then
@@ -25,5 +28,7 @@ while [ "$(date +%s)" -lt $deadline ]; do
   [ "$notready" = 0 ] && [ ${#seen[@]} -gt 0 ] && break
   sleep 5
 done
+started=$(date -d "$(docker inspect -f '{{.State.StartedAt}}' $C)" +%s)
+[ "$started" -gt "$t0" ] && log "WARNING: the cluster container restarted during this run ($(date -d @$started +%T)): the timeline is not valid"
 log "done after $(( $(date +%s) - t0 ))s; not ready:"
 K -n authority01 get pods --no-headers | awk '{split($2,a,"/"); if(a[1]!=a[2]&&$3!="Completed") print}' || true

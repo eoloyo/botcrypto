@@ -63,7 +63,7 @@ chmod +x "$WORK/runsc.patched" "$WORK/containerd-shim-runsc-v1.patched"
 # --- 3. launch k3s-in-privileged-Docker with runsc as a runtime --------------
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 log "starting k3s ($K3S_IMAGE) with gVisor runtime …"
-docker run -d --name "$CONTAINER" --privileged --tmpfs /run --tmpfs /var/run \
+docker run -d --name "$CONTAINER" --restart unless-stopped --privileged --tmpfs /run --tmpfs /var/run \
   -p 6443:6443 -e K3S_TOKEN=gvisor-lab \
   -v "$HERE/config/registries.yaml:/etc/rancher/k3s/registries.yaml:ro" \
   -v "$HERE/config/config.toml.tmpl:/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl:ro" \
