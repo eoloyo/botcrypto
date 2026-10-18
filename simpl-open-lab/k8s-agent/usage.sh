@@ -1,41 +1,55 @@
 #!/usr/bin/env bash
-# usage.sh [namespace...] — memory and CPU time actually used by each pod, next to what it requests.
-# metrics-server is off and `crictl stats` times out under gVisor, so this reads the gVisor sandbox
-# processes from the host, as ../k8s-sizing/measure.sh does: RSS and CPU-seconds of the runsc
-# processes whose command line carries the pod's sandbox id. Prints TSV.
+# usage.sh [namespace...] — memory and CPU each pod actually uses, next to what it requests. Prints TSV.
+#
+# metrics-server is off in this k3s, so this asks containerd (`crictl stats`) for each container's
+# working set (the figure Kubernetes holds against memory limits) and cumulative CPU time, summed per
+# pod. Under gVisor the RSS of a pod's runsc processes is NOT a usable substitute: the application's
+# memory lives in a shared memory file outside them, and that RSS misses most of it.
+# `crictl stats` times out while the node is saturated (e.g. during start-up), so it is retried.
 set -uo pipefail
 NSS=("${@:-authority01}")
 C=k3s-gvisor
-K() { docker exec $C kubectl "$@"; }
-tck=$(getconf CLK_TCK); page=$(getconf PAGESIZE)
-printf 'namespace\tpod\trss_MiB\tcpu_s\treq_mem_MiB\tlim_mem_MiB\treq_cpu_m\n'
-for ns in "${NSS[@]}"; do
-  K -n "$ns" get pods -o json | python3 -c '
-import json, sys
+for _ in $(seq 1 10); do
+  stats=$(timeout 90 docker exec $C crictl stats -o json 2>/dev/null) && [ -n "$stats" ] && break
+  sleep 15
+done
+[ -n "${stats:-}" ] || { echo "crictl stats did not answer" >&2; exit 1; }
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+printf '%s' "$stats" > "$tmp/stats.json"
+for ns in "${NSS[@]}"; do docker exec $C kubectl -n "$ns" get pods -o json > "$tmp/pods-$ns.json"; done
+python3 - "$tmp" <<'EOF'
+import glob, json, os, sys
+from collections import defaultdict
+
 def mem(v):
-    v = str(v); f = {"Ki": 1/1024, "Mi": 1, "Gi": 1024, "M": 1, "G": 1000}
-    for k, m in f.items():
+    v = str(v)
+    for k, m in {"Ki": 1/1024, "Mi": 1, "Gi": 1024, "M": 1, "G": 1000}.items():
         if v.endswith(k): return float(v[:-len(k)]) * m
     return float(v) / 2**20 if v else 0
+
 def cpu(v):
     v = str(v); return float(v[:-1]) if v.endswith("m") else float(v or 0) * 1000
-for p in json.load(sys.stdin)["items"]:
-    if p["status"].get("phase") != "Running": continue
-    rq = rl = c = 0
-    for ct in p["spec"]["containers"]:
-        r = ct.get("resources") or {}
-        rq += mem((r.get("requests") or {}).get("memory", 0)); rl += mem((r.get("limits") or {}).get("memory", 0))
-        c += cpu((r.get("requests") or {}).get("cpu", 0))
-    print(p["metadata"]["name"], int(rq), int(rl), int(c))' |
-  while read -r pod rq rl rc; do
-    sid=$(docker exec $C crictl pods --namespace "$ns" --name "^$pod\$" -q 2>/dev/null | head -1)
-    rss=0; ticks=0
-    for p in $(pgrep -f "runsc.*${sid:0:12}" 2>/dev/null); do
-      read -r -a st < /proc/$p/stat 2>/dev/null || continue
-      ticks=$(( ticks + st[13] + st[14] ))
-      rss=$(( rss + $(awk '{print $2}' /proc/$p/statm 2>/dev/null || echo 0) ))
-    done
-    printf '%s\t%s\t%d\t%.1f\t%s\t%s\t%s\n' "$ns" "$pod" $(( rss * page / 1048576 )) \
-      "$(echo "$ticks / $tck" | bc -l)" "$rq" "$rl" "$rc"
-  done
-done
+
+used = defaultdict(lambda: [0, 0])          # (ns, pod) -> [working set bytes, cpu ns]
+for s in json.load(open(os.path.join(sys.argv[1], "stats.json")))["stats"]:
+    lab = s["attributes"]["labels"]
+    key = (lab.get("io.kubernetes.pod.namespace"), lab.get("io.kubernetes.pod.name"))
+    used[key][0] += int(((s.get("memory") or {}).get("workingSetBytes") or {}).get("value", 0))
+    used[key][1] += int(((s.get("cpu") or {}).get("usageCoreNanoSeconds") or {}).get("value", 0))
+
+print("namespace\tpod\tworking_set_MiB\tcpu_s\treq_mem_MiB\tlim_mem_MiB\treq_cpu_m")
+tot = [0, 0, 0]
+for f in sorted(glob.glob(os.path.join(sys.argv[1], "pods-*.json"))):
+    for p in json.load(open(f))["items"]:
+        if p["status"].get("phase") != "Running": continue
+        rq = rl = c = 0
+        for ct in p["spec"]["containers"]:
+            r = ct.get("resources") or {}
+            rq += mem((r.get("requests") or {}).get("memory", 0))
+            rl += mem((r.get("limits") or {}).get("memory", 0))
+            c += cpu((r.get("requests") or {}).get("cpu", 0))
+        ws, ns_cpu = used[(p["metadata"]["namespace"], p["metadata"]["name"])]
+        tot[0] += ws // 2**20; tot[1] += rq; tot[2] += rl
+        print(f'{p["metadata"]["namespace"]}\t{p["metadata"]["name"]}\t{ws // 2**20}\t{ns_cpu / 1e9:.1f}\t{int(rq)}\t{int(rl)}\t{int(c)}')
+print(f"TOTAL\t\t{tot[0]}\t\t{int(tot[1])}\t{int(tot[2])}\t")
+EOF
