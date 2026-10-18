@@ -1,5 +1,6 @@
-# k3s containerd config template. `{{ template "base" . }}` pulls in k3s's own
+# k3s containerd config template. The "base" template include (below) pulls in k3s's own
 # generated config; we append a `runsc` runtime pointing at /etc/containerd/runsc.toml.
+# Never write the template-include syntax inside a comment: Go templates expand it there too.
 # NOTE: only NEW tables are added here (runtimes.runsc + its options). Do NOT
 # re-declare [plugins."io.containerd.grpc.v1.cri".containerd] — that duplicates a
 # table k3s already emits and containerd will fail to parse ("duplicated tables").
