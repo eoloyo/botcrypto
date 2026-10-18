@@ -17,7 +17,8 @@ webhook. Every change is listed here; nothing else in the official manifests is 
   * CPU *requests* are scaled by CPU_REQUEST_SCALE (default 0.3): the agent requests 6.3 cores and
     the lab node has 4; limits and memory are left as the charts set them. EJBCA, the start-up
     critical path (CA set-up, then everything that needs its certificates), gets CRITICAL_CPU
-    (default 1500m) instead, so it wins the CPU while all the JVMs start at once;
+    (default 1500m) instead, capped at the chart's CPU limit (500m), so it wins the CPU while all
+    the JVMs start at once;
   * EJBCA's set-up container runs ~37 short `ejbca.sh` CLI JVMs: JAVA_OPTS_EJB_CLI (EJBCA's own knob)
     keeps their defaults and adds C1-only JIT and class-data sharing (12.2 s -> 8.5 s per call);
   * containers with a livenessProbe get a startupProbe (same check, up to STARTUP_GRACE seconds,
@@ -113,7 +114,13 @@ def main():
                     if "cpu" in req:
                         v = str(req["cpu"])
                         milli = float(v[:-1]) if v.endswith("m") else float(v) * 1000
-                        req["cpu"] = CRITICAL.get(meta["name"]) or f"{max(1, round(milli * CPU_SCALE))}m"
+                        lim = str(((c.get("resources") or {}).get("limits") or {}).get("cpu", ""))
+                        lim_m = (float(lim[:-1]) if lim.endswith("m") else float(lim) * 1000) if lim else None
+                        if meta["name"] in CRITICAL:
+                            crit = float(CRITICAL[meta["name"]].rstrip("m"))
+                            req["cpu"] = f"{round(min(crit, lim_m) if lim_m else crit)}m"
+                        else:
+                            req["cpu"] = f"{max(1, round(milli * CPU_SCALE))}m"
                     if isinstance(c.get("image"), str):
                         c["image"] = c["image"].strip()
                 for c in spec.get("initContainers", []):
