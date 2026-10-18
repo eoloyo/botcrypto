@@ -35,22 +35,29 @@ s["authority01-keycloak#admin"] = v()
 s["authority01-keycloak#onboarding_sa"] = v()
 s["authority-client#cli"] = v(); s["authority-client#test-client"] = v()
 s["onboarding-client#onboarding-sa"] = s["authority01-keycloak#onboarding_sa"]; s["onboarding-client#test-client"] = v()
-s["lab#postgres"] = v(); s["lab#kafka-admin"] = v()
+s["lab#postgres"] = v(); s["lab#kafka-admin"] = v(); s["lab#redis"] = v()
 json.dump(s, open(sys.argv[1], "w"), indent=1)
 EOF
   chmod 600 "$WORK/secrets.json"
 fi
+python3 - "$WORK/secrets.json" <<'EOF'   # keys added since secrets.json was first generated
+import json, secrets, sys
+s = json.load(open(sys.argv[1]))
+if "lab#redis" not in s:
+    s["lab#redis"] = secrets.token_hex(16); json.dump(s, open(sys.argv[1], "w"), indent=1)
+EOF
 
 # --- 2. images into the cluster's containerd (one stream, shared layers sent once) -------------
 mapfile -t IMAGES < <(grep -ohE '^\s+image:\s*"?[^" ]+' "${AGENT[@]}" | sed -E 's/.*image:\s*"?//' | sort -u)
 IMAGES+=(postgres:16-alpine apache/kafka:3.8.1 alpine/kubectl:latest rancher/mirrored-library-busybox:1.36.1)   # lab: alpine:3.20 retagged (ECR quota)   # the Job puts its image on the next line
 have=$(docker exec $C ctr -n k8s.io images ls -q)
-missing=(); for i in "${IMAGES[@]}"; do
+missing=(); absent=(); for i in "${IMAGES[@]}"; do
   ref=${i#docker.io/}; [[ ${ref##*/} == *:* ]] || ref=$ref:latest      # containerd's normalised name
   if [[ $ref != */* ]]; then ref=docker.io/library/$ref; elif [[ ${ref%%/*} != *[.:]* ]]; then ref=docker.io/$ref; fi
   grep -qxF "$ref" <<<"$have" && continue
-  if docker image inspect "$i" >/dev/null 2>&1; then missing+=("$i"); else log "WARNING: $i is neither in the cluster nor in Docker"; fi
+  if docker image inspect "$i" >/dev/null 2>&1; then missing+=("$i"); else absent+=("$i"); fi
 done
+if [ ${#absent[@]} -gt 0 ]; then printf 'missing image: %s\n' "${absent[@]}" >&2; exit 1; fi
 if [ ${#missing[@]} -gt 0 ]; then
   log "importing ${#missing[@]} images"
   docker save --platform linux/amd64 "${missing[@]}" | docker exec -i $C ctr -n k8s.io images import --platform linux/amd64 - | tail -1

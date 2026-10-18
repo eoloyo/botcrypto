@@ -16,8 +16,15 @@ webhook. Every change is listed here; nothing else in the official manifests is 
     them from code.europa.eu (pods have no route to the internet here);
   * CPU *requests* are scaled by CPU_REQUEST_SCALE (default 0.5): the agent requests 6.3 cores and
     the lab node has 4; limits and memory are left as the charts set them;
+  * containers with a livenessProbe get a startupProbe (same check, up to STARTUP_GRACE seconds,
+    default 900) so the official liveness/readiness probes only start once the container is up:
+    under gVisor on 4 cores Keycloak and the Spring services take longer than the charts' fixed
+    initialDelaySeconds, and the liveness probe kills them mid-start;
+  * adds the `redis-secrets` Secret (key `redis`) that the redis chart and the services read but no
+    chart creates (in the official set-up it is provisioned alongside the OpenBao secrets);
   * puts namespaced objects without a namespace into authority01 (ArgoCD's destination namespace).
 """
+import copy
 import json
 import os
 import re
@@ -26,6 +33,7 @@ import sys
 import yaml
 
 CLUSTER_SCOPED = {"Namespace", "ClusterRole", "ClusterRoleBinding", "StorageClass", "PriorityClass"}
+STARTUP_GRACE = int(os.environ.get("STARTUP_GRACE", "900"))
 CPU_SCALE = float(os.environ.get("CPU_REQUEST_SCALE", "0.5"))
 VAULT = re.compile(r"vault:\$\{SECRETENGINE\}/data/([^#\s\"]+)#([^\s\"]+)")
 
@@ -68,6 +76,11 @@ def main():
                 spec["runtimeClassName"] = "runsc"
                 for c in spec.get("initContainers", []) + spec.get("containers", []):
                     c["imagePullPolicy"] = "IfNotPresent"
+                    live = c.get("livenessProbe")
+                    if live and "startupProbe" not in c and c in spec.get("containers", []):
+                        probe = {k: copy.deepcopy(v) for k, v in live.items() if k in ("httpGet", "tcpSocket", "exec", "grpc")}
+                        c["startupProbe"] = {**probe, "periodSeconds": 5, "timeoutSeconds": 5,
+                                             "failureThreshold": STARTUP_GRACE // 5}
                     req = (c.get("resources") or {}).get("requests") or {}
                     if "cpu" in req:
                         v = str(req["cpu"])
@@ -83,6 +96,9 @@ def main():
                         spec["volumes"].append({"name": "spi-src", "hostPath": {"path": "/var/lib/simpl-spi"}})
             text = VAULT.sub(vault, yaml.safe_dump(doc, sort_keys=False, width=1 << 20))
             out.append(text)
+    out.append(yaml.safe_dump({"apiVersion": "v1", "kind": "Secret",
+                               "metadata": {"name": "redis-secrets", "namespace": "authority01"},
+                               "stringData": {"redis": secrets["lab#redis"]}}, sort_keys=False))
     sys.stdout.write("---\n".join(out))
 
 

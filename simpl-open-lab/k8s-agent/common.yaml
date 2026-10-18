@@ -38,7 +38,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env: [{name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: lab-secrets, key: postgres}}}]
           ports: [{containerPort: 5432}]
-          readinessProbe: {exec: {command: [pg_isready, -U, postgres]}, periodSeconds: 3}
+          readinessProbe: {exec: {command: [pg_isready, -h, 127.0.0.1, -U, postgres]}, periodSeconds: 3}
           volumeMounts:
             - {name: init, mountPath: /docker-entrypoint-initdb.d}
             - {name: secrets, mountPath: /lab-secrets}
