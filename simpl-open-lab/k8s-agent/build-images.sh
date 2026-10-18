@@ -41,7 +41,13 @@ build_one() {
       curl -fsSL -o "$d/kubectl" "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
         || { echo "$n: kubectl download FAILED"; return 1; }
     fi
-    sed -e 's#^RUN curl -LO .*#COPY kubectl kubectl#' "$d/Dockerfile" > "$d/Dockerfile.lab"; df=Dockerfile.lab
+    sed -e 's#^RUN curl -LO .*#COPY kubectl kubectl#' \
+        -e 's#^COPY --chmod=755 entrypoint.sh entrypoint.sh#COPY --chmod=755 entrypoint.lab.sh entrypoint.sh#' \
+        "$d/Dockerfile" > "$d/Dockerfile.lab"; df=Dockerfile.lab
+    # EJBCA_BOOTSTRAP_MARKER (set by post-render.py): a file on EJBCA's persistent volume that says the
+    # set-up is done, so a restart skips booting a whole set-up server just to find that out (EJBCA.md).
+    # Unset, the script behaves exactly as Simpl's.
+    python3 "$HERE/patch-preconfig.py" "$d/entrypoint.sh" > "$d/entrypoint.lab.sh"
     # EJBCA_BASE=<keyfactor/ejbca-ce tag>: the same set-up on another EJBCA release (EJBCA.md),
     # tagged <version>-ejbca<release> so the official pair stays in the cluster
     if [ -n "${EJBCA_BASE:-}" ]; then
@@ -51,9 +57,8 @@ build_one() {
         docker tag "mirror.gcr.io/keyfactor/ejbca-ce:${EJBCA_BASE}" "keyfactor/ejbca-ce:${EJBCA_BASE}"; }
       # EJBCA 9's `ca init` asks for the crypto token's password even for an existing, auto-activated
       # token (EJBCA 8 did not) and fails without a console: pass the PIN the script gave the token
-      sed -E 's#^( +)--tokenName (Simpl[A-Za-z]*CryptoToken) \\$#\1--tokenName \2 \\\n\1--tokenPass 987654321 \\#' \
-        "$d/entrypoint.sh" > "$d/entrypoint.lab.sh"
-      sed -i 's#^COPY --chmod=755 entrypoint.sh entrypoint.sh#COPY --chmod=755 entrypoint.lab.sh entrypoint.sh#' "$d/Dockerfile.lab"
+      sed -i -E 's#^( +)--tokenName (Simpl[A-Za-z]*CryptoToken) \\$#\1--tokenName \2 \\\n\1--tokenPass 987654321 \\#' \
+        "$d/entrypoint.lab.sh"
       img="$img-ejbca${EJBCA_BASE}"
     fi
   fi

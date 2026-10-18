@@ -33,6 +33,10 @@ webhook. Every change is listed here; nothing else in the official manifests is 
     gives the Simpl Java services a truststore with the lab CA; see edge.py;
   * EJBCA_RELEASE (e.g. 9.6.3) swaps EJBCA for another keyfactor/ejbca-ce release, with Simpl's
     ejbca-preconfig rebuilt on it (build-images.sh EJBCA_BASE); unset = the chart's 8.2.0.1;
+  * EJBCA_PERSIST (default 1) gives EJBCA a PersistentVolume at /opt/keyfactor/secrets/persistent,
+    where Keyfactor's start-up keeps "a server TLS certificate from previous runs" (the chart mounts
+    nothing there, so every start issued a new one: ~1.5 min of CLI JVMs), and points ejbca-preconfig's
+    bootstrap marker at it (patch-preconfig.py) so a restart skips the set-up server boot. EJBCA.md;
   * adds the `redis-secrets` Secret (key `redis`) that the redis chart and the services read but no
     chart creates (in the official set-up it is provisioned alongside the OpenBao secrets);
   * puts namespaced objects without a namespace into authority01 (ArgoCD's destination namespace).
@@ -53,6 +57,8 @@ is_java = lambda image: image.strip().startswith(SIMPL) and not image.strip().rs
 CLUSTER_SCOPED = {"Namespace", "ClusterRole", "ClusterRoleBinding", "StorageClass", "PriorityClass"}
 STARTUP_GRACE = int(os.environ.get("STARTUP_GRACE", "900"))
 EJBCA_RELEASE = os.environ.get("EJBCA_RELEASE")
+EJBCA_PERSIST = os.environ.get("EJBCA_PERSIST", "1") == "1"
+EJBCA_PERSISTENT_DIR = "/opt/keyfactor/secrets/persistent"
 CPU_SCALE = float(os.environ.get("CPU_REQUEST_SCALE", "0.3"))
 CRITICAL = {"ejbca-community-helm": os.environ.get("CRITICAL_CPU", "1500m")}
 EJBCA_CLI_OPTS = ("-Xms32m -Xmx32m -XX:MetaspaceSize=32M -XX:MaxMetaspaceSize=48m -XX:MaxRAM=80m "
@@ -97,6 +103,17 @@ def main():
                             client["secret"] = secrets[f"{realm['realm']}-client#{client['clientId']}"]
                     doc["data"][name] = json.dumps(realm, indent=2)
             spec = pod_spec(doc)
+            if spec is not None and EJBCA_PERSIST and meta["name"] == "ejbca-community-helm":
+                # the chart renders empty lists as null
+                spec["volumes"] = (spec.get("volumes") or []) + [
+                    {"name": "ejbca-persistent", "persistentVolumeClaim": {"claimName": "ejbca-persistent"}}]
+                for c in (spec.get("initContainers") or []) + spec["containers"]:
+                    c["volumeMounts"] = (c.get("volumeMounts") or []) + [
+                        {"name": "ejbca-persistent", "mountPath": EJBCA_PERSISTENT_DIR}]
+                for c in spec.get("initContainers") or []:
+                    c["env"] = (c.get("env") or []) + [
+                        {"name": "EJBCA_BOOTSTRAP_MARKER", "value": f"{EJBCA_PERSISTENT_DIR}/simpl-bootstrapped"}]
+                doc["spec"]["strategy"] = {"type": "Recreate"}   # one pod at a time on the RWO volume
             if spec is not None:
                 spec["runtimeClassName"] = "runsc"
                 if PKI:
@@ -141,6 +158,11 @@ def main():
                         spec["volumes"].append({"name": "spi-src", "hostPath": {"path": "/var/lib/simpl-spi"}})
             text = VAULT.sub(vault, yaml.safe_dump(doc, sort_keys=False, width=1 << 20))
             out.append(text)
+    if EJBCA_PERSIST:
+        out.append(yaml.safe_dump({"apiVersion": "v1", "kind": "PersistentVolumeClaim",
+                                   "metadata": {"name": "ejbca-persistent", "namespace": "authority01"},
+                                   "spec": {"accessModes": ["ReadWriteOnce"],
+                                            "resources": {"requests": {"storage": "100Mi"}}}}, sort_keys=False))
     out.append(yaml.safe_dump({"apiVersion": "v1", "kind": "Secret",
                                "metadata": {"name": "redis-secrets", "namespace": "authority01"},
                                "stringData": {"redis": secrets["lab#redis"]}}, sort_keys=False))
