@@ -5,6 +5,66 @@ It is an action of a **provider agent**, performed by a specific chain of servic
 This document records the exact intended architecture (traced from the code) and how
 "only a provider agent can publish" is actually enforced.
 
+## All steps, end to end (traced from sd-tooling-be and catalogue-be)
+
+**Before any publication (one-time)**
+1. The provider is an onboarded participant: its credential was issued by the authority's CA (EJBCA)
+   and is installed in its own authentication-provider. Without it there is no Tier-2 identity.
+2. The authority publishes the SD schemas (SHACL shapes) through its schema-manager; the provider's
+   **schema-sync adapter** mirrors them locally (`schema-sync-service.repository-path`). The catalogue
+   validates against the same shapes in its own schema store.
+3. The provider's connector and the data's location (e.g. an S3 bucket) exist.
+
+**In the wizard (simpl-sd-ui → sd-tooling-be)**
+4. Pick a schema (`GET /v2/schemas`); the form is generated from it.
+5. Pick a sharing method and fill the resource address from its template
+   (`/resourceAddress/sharingMethods/{id}/templates`, `.../schema`, `.../uiSchema`).
+6. Define the access and usage policies (ODRL; `/policy/access`, `/policy/usage`, offered identity
+   attributes from the authentication-provider) and upload the contract clauses (`/contractClause`).
+
+**Enrich and validate** (`POST /v3/selfDescriptions/enriched?schemaId=`, `EnrichServiceImpl`)
+7. Load the schema's metadata and content from the schema-sync repository.
+8. Validate the resource address against its template's JSON schema.
+9. Set `offeringType` (from the schema), `sharingMethodId`, and `providedBy` = the participant id
+   (from the authentication-provider).
+10. Hash the contract documents (generic contract, SLA, licence, billing schema): SHA-256 of each
+    `dcterms:source`, stored as `simpl:hash`.
+11. **Connector adapter**: register the offering in the provider's connector; the SD comes back
+    enriched with what the connector created.
+12. **Asset orchestrator**: register the delivery workflow for the resource address.
+13. **Remove the provider data address** from the SD: the data's location and credentials are never
+    published.
+14. Add `dct:conformsTo` (schema id, name, version), generate the resource `@id`, `dcterms:identifier`
+    and `schema:version`.
+15. **SHACL-validate** the SD against the schema (validation service).
+
+**Sign** (`POST /v1/selfDescriptions/finalized`)
+16. Runs steps 7–15 again, then the **VC Issuer** wraps the SD as a signed Verifiable Credential
+    (`POST /v1/credentials/issue`; expiry `vc-issuer.expiration-days`, 36500 by default).
+
+**Publish** (`POST /v1/selfDescriptions/publications`)
+17. `FederatedCatalogueTier2Client` gets an ephemeral proof and SAP token from the provider's own IAA
+    and calls the **authority's** tier2-gateway over mTLS (`federated-catalogue.tier2-gateway.url`,
+    path `/fc`); the gateway checks the certificate, the proof and the identity attributes, and
+    routes to fc-service.
+18. If the catalogue refuses (409 duplicate, or any error), sd-tooling **rolls back** the
+    asset-orchestrator registration.
+
+**In the catalogue** (fc-service `addSelfDescription`)
+19. Parse, then verify: semantics and **SHACL schema: on**; **VP and VC signatures: off** in Simpl's
+    configuration (`verification.vp-signature/vc-signature: false`).
+20. **Quality scoring** service: score and classification stored with the SD.
+21. Extract versioning (`resourceKey` + `currentVersion`).
+22. Store: one *active* SD per subject id and per `resourceKey`; same hash or a second active
+    version → 409. The claims go into the graph database, which is what search queries.
+23. `201 Created` with the SD hash, id and status `active`.
+
+**After publication**
+24. Consumers search the catalogue (through the authority's tier2-gateway, `CONSUMER` attribute) and
+    read `serviceAccessPoint` to reach the provider's connector for negotiation and transfer.
+25. Versions and revocation go through the **catalogue adapter** at the authority (`/adapter`):
+    `GET /resourceDescriptions/{id}/versions`, `POST .../{id}/revoke`.
+
 ## The chain
 
 ```
