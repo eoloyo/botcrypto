@@ -3,6 +3,7 @@
 # shim CA key and echoes the request nonce in responseExtensions (which the Simpl
 # IAA OCSP client requires, and which x/crypto/ocsp cannot emit).
 import glob
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime, timezone, timedelta
 from cryptography import x509
@@ -10,8 +11,12 @@ from cryptography.x509 import ocsp
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
-CA   = x509.load_pem_x509_certificate(open("/tmp/shim-ca.pem","rb").read())
-CKEY = load_pem_private_key(open("/tmp/shim-ca.key","rb").read(), password=None)
+# OCSP_CA_DIR / OCSP_PORT: one responder per CA when several authorities run (defaults: the
+# single lab CA); leaves come from the shim's issued-*.pem in that directory
+CA_DIR = os.environ.get("OCSP_CA_DIR", "/tmp")
+PORT = int(os.environ.get("OCSP_PORT", "30081"))
+CA   = x509.load_pem_x509_certificate(open(f"{CA_DIR}/shim-ca.pem","rb").read())
+CKEY = load_pem_private_key(open(f"{CA_DIR}/shim-ca.key","rb").read(), password=None)
 NONCE_OID = x509.ObjectIdentifier("1.3.6.1.5.5.7.48.1.2")
 
 def _der_len(b, i):
@@ -42,7 +47,7 @@ def extract_nonce_extnvalue(der):
 def load_known_leaves():
     # Every provider/agent leaf the lab has issued (serial -> cert).
     out = {}
-    for p in glob.glob("/tmp/prov-*.pem") + glob.glob("/tmp/agent-*.pem") + glob.glob("/tmp/*-leaf.pem"):
+    for p in glob.glob("/tmp/prov-*.pem") + glob.glob("/tmp/agent-*.pem") + glob.glob("/tmp/*-leaf.pem") + glob.glob(f"{CA_DIR}/issued-*.pem"):
         try:
             c = x509.load_pem_x509_certificate(open(p,"rb").read())
             out[c.serial_number] = c
@@ -54,7 +59,6 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         ln = int(self.headers.get("Content-Length", 0))
         der = self.rfile.read(ln)
-        open("/tmp/last-ocsp-req.bin","wb").write(der)
         try:
             req = ocsp.load_der_ocsp_request(der)
         except Exception as e:
@@ -87,4 +91,4 @@ class H(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
 
 if __name__ == "__main__":
-    HTTPServer(("127.0.0.1", 30081), H).serve_forever()
+    HTTPServer(("127.0.0.1", PORT), H).serve_forever()

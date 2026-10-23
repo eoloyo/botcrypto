@@ -8,6 +8,7 @@
 package main
 
 import (
+	"crypto/sha1"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -59,8 +60,26 @@ type revokeResp struct {
 	Status       string `json:"status"`
 }
 
-const caCertPath = "/tmp/shim-ca.pem"
-const caKeyPath = "/tmp/shim-ca.key"
+// SHIM_DIR, SHIM_HTTP_PORT, SHIM_HTTPS_PORT and SHIM_CA_ORG let several independent CAs run side
+// by side (one per governance authority); the defaults are the single-CA lab set-up.
+func env(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}
+
+var (
+	shimDir    = env("SHIM_DIR", "/tmp")
+	httpPort   = env("SHIM_HTTP_PORT", "30080")
+	httpsPort  = env("SHIM_HTTPS_PORT", "30443")
+	caOrg      = env("SHIM_CA_ORG", "Simpl-Open (local)")
+	// the nonce-echoing OCSP responder (iaa/ocsp-responder.py): x/crypto/ocsp cannot put the
+	// nonce in the response, which the Simpl OCSP client requires
+	ocspURL = env("SHIM_OCSP_URL", "http://localhost:30081/ocsp")
+	caCertPath = shimDir + "/shim-ca.pem"
+	caKeyPath  = shimDir + "/shim-ca.key"
+)
 
 func initCA() {
 	// Reuse a persisted CA across restarts so issued certs, the OCSP responder,
@@ -79,7 +98,7 @@ func initCA() {
 	caKey, _ = rsa.GenerateKey(rand.Reader, 2048)
 	tmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "OnBoardingCA", Organization: []string{"Simpl-Open (local)"}},
+		Subject:               pkix.Name{CommonName: "OnBoardingCA", Organization: []string{caOrg}},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().AddDate(10, 0, 0),
 		IsCA:                  true,
@@ -128,7 +147,12 @@ func enroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	// a Subject Key Identifier, as EJBCA issues them: Simpl reads it from the credential
+	// (CredentialUtil.getSubjectKeyIdentifier), e.g. when one authority discovers another
+	spki, _ := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	ski := sha1.Sum(spki)
 	leaf := &x509.Certificate{
+		SubjectKeyId:          ski[:],
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
 		NotBefore:             time.Now().Add(-time.Minute),
@@ -139,14 +163,16 @@ func enroll(w http.ResponseWriter, r *http.Request) {
 		BasicConstraintsValid: true,
 		// Authority Information Access (AIA): the Simpl IAA credential validation
 		// (eu.europa.ec.simpl.client.util) requires this extension to be present.
-		OCSPServer:            []string{"http://localhost:30081/ocsp"},
-		IssuingCertificateURL: []string{"http://localhost:30080/ejbca/publicweb/webdist/certdist?cmd=iep&issuer=OnBoardingCA"},
+		OCSPServer:            []string{ocspURL},
+		IssuingCertificateURL: []string{"http://localhost:" + httpPort + "/ejbca/publicweb/webdist/certdist?cmd=iep&issuer=OnBoardingCA"},
 	}
 	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, caCert, csr.PublicKey, caKey)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	// every issued leaf, for the OCSP responder (it needs the certificate to answer for its serial)
+	_ = writePEM(fmt.Sprintf("%s/issued-%x.pem", shimDir, serial), "CERTIFICATE", leafDER)
 	log.Printf("Issued cert: subject=%q serial=%x (CA=%s, profile=%s)", csr.Subject.String(), serial, req.CertificateAuthorityName, req.CertificateProfileName)
 	resp := enrollResp{
 		Certificate:    b64(leafDER),
@@ -186,6 +212,9 @@ func extractNonce(der []byte) *pkix.Extension {
 		return nil
 	}
 	j := i + len(oid)
+	if j+2 < len(der) && der[j] == 0x01 { // optional "critical" BOOLEAN (the Simpl client sets it)
+		j += 2 + int(der[j+1])
+	}
 	if j >= len(der) || der[j] != 0x04 { // extnValue OCTET STRING
 		return nil
 	}
@@ -226,9 +255,11 @@ func ocspHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req, err := ocsp.ParseRequest(der)
 	if err != nil {
+		log.Printf("ocsp: unparseable request (%d bytes): %v", len(der), err)
 		http.Error(w, err.Error(), 400)
 		return
 	}
+	log.Printf("ocsp: status of serial %x (nonce=%v)", req.SerialNumber, extractNonce(der) != nil)
 	tmpl := ocsp.Response{
 		Status:       ocsp.Good,
 		SerialNumber: req.SerialNumber,
@@ -296,25 +327,25 @@ func main() {
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		OCSPServer:            []string{"http://localhost:30081/ocsp"},
-		IssuingCertificateURL: []string{"http://localhost:30080/ejbca/publicweb/webdist/certdist?cmd=iep&issuer=OnBoardingCA"},
+		OCSPServer:            []string{ocspURL},
+		IssuingCertificateURL: []string{"http://localhost:" + httpPort + "/ejbca/publicweb/webdist/certdist?cmd=iep&issuer=OnBoardingCA"},
 	}
 	srvDER, _ := x509.CreateCertificate(rand.Reader, srvTmpl, caCert, &srvKey.PublicKey, caKey)
-	_ = writePEM("/tmp/shim-server-leaf.pem", "CERTIFICATE", srvDER)
+	_ = writePEM(shimDir+"/shim-server-leaf.pem", "CERTIFICATE", srvDER)
 	// present the full chain [server, CA] so clients can build the path to the trusted CA
 	tlsCert := tls.Certificate{Certificate: [][]byte{srvDER, caDER}, PrivateKey: srvKey}
 
 	mux := http.HandlerFunc(router)
 	// HTTP on 30080 (easy direct testing) + HTTPS on 30443 (identity-provider default)
 	go func() {
-		log.Println("EJBCA-shim HTTP  on :30080")
-		log.Fatal(http.ListenAndServe("127.0.0.1:30080", mux))
+		log.Println("EJBCA-shim HTTP  on :" + httpPort)
+		log.Fatal(http.ListenAndServe("127.0.0.1:"+httpPort, mux))
 	}()
 	srv := &http.Server{
-		Addr:      "127.0.0.1:30443",
+		Addr:      "127.0.0.1:" + httpsPort,
 		Handler:   mux,
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{tlsCert}},
 	}
-	log.Println("EJBCA-shim HTTPS on :30443")
+	log.Println("EJBCA-shim HTTPS on :" + httpsPort)
 	log.Fatal(srv.ListenAndServeTLS("", ""))
 }
