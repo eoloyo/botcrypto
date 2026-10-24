@@ -14,7 +14,9 @@ cd simpl-open-lab/iaa/fed
 ./authority.sh B          # DestinE data space   : idp :8303 sap :8302 authp :8305 CA :33443 t1 :8300
 ./authority.sh A          # EOSC research data space: idp :8203 sap :8202 authp :8205 CA :32443 t1 :8200
 python3 -I federate.py    # BP02D: B trusts A + attribute mapping, verified
+python3 -I exchange.py    # LIVE: A issues a real proof -> B exchanges it -> mapped attributes
 ./reset.sh                # stop both and delete their state
+# ../../scripts/17-federated-contract.sh  # the mapped attributes drive the provider's contract decision
 ```
 
 Each `authority.sh <A|B>` brings up, for one authority: its own CA (`ejbca-shim`), a Postgres
@@ -60,14 +62,25 @@ attributes the provider's ODRL policy checks in the pilot.
 - **Lab stand-ins:** `tier1_router.py` for each authority's Tier-1 gateway (routing only — the
   discovery endpoints are public); one CA (`ejbca-shim`) per authority instead of EJBCA; a shared
   Kafka broker.
-- **Not yet run here — the live ephemeral-proof exchange.** The runtime is
-  `TokenExchangeEphemeralProofGenerator`: a consumer under A gets an A-issued ephemeral proof, and
-  B's security-attributes provider exchanges it (`POST /tier2/v2/token/exchange`) for a B-issued
-  proof carrying the **mapped** attributes, which the Tier-2 gateway's ABAC then enforces. Running
-  it end to end needs the consumer and provider **agents'** own authentication-providers and
-  Tier-2 gateways up (the proof-of-possession is signed with the agent key the authp holds behind
-  mTLS), which this step does not start. The trust and mapping it exercises are exactly what this
-  script establishes and verifies.
+- **Real — the live ephemeral-proof exchange** (`exchange.py`). A consumer is onboarded at A with
+  a locally-generated key (A's CA signs its CSR, the credential is activated, its Tier-1 key
+  registered, EOSC attributes assigned). A's security-attributes provider issues it a real,
+  A-signed ephemeral proof (`POST /tier2/v2/token`, with a proof-of-possession signed by the
+  consumer key). B's security-attributes provider then exchanges it
+  (`POST /tier2/v2/token/exchange`): it looks A up as a trusted authority, applies the stored
+  mapping via `TokenExchangeEphemeralProofGenerator`, and issues a B-signed proof. Measured:
+  `CONSUMER + EOSC_DESTINE_PARTNER` on the A proof becomes `CONSUMER + DESTINE_UPGRADED_ACCESS` on
+  the B proof. **Nothing is forged** — B only ever maps a genuinely A-signed proof; the SAP exchange
+  does not re-check the signature, so a real A signature is the only legitimate input.
+- **Then the contract decision** (`../../scripts/17-federated-contract.sh`). The attributes that come
+  out of the exchange are fed to the DestinE provider connector's `ConsumptionConstraintFunction`
+  for a `DESTINE_UPGRADED_ACCESS`-gated offer: a partner consumer (`CONSUMER + EOSC_DESTINE_PARTNER`
+  at EOSC → `CONSUMER + DESTINE_UPGRADED_ACCESS` at DestinE) gets a contract; a plain consumer
+  (`CONSUMER` only → `CONSUMER`) is refused. This is `16-destine-eosc.sh`'s mock replaced by the
+  real federated identity.
+- **Lab shortcut in the exchange:** the `Credential-Id` header on the Tier-2 calls is set directly,
+  which the Tier-2 gateway would otherwise set after the mTLS handshake; no gateway is run. The
+  proof issuance, trust check, mapping and signing are all the services' own code.
 
 ## Ports
 
