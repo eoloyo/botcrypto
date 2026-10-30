@@ -65,10 +65,10 @@ def main():
         "issuanceDate": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
         "credentialSubject": {
             "id": holder,
-            "firstName": "Ada",
-            "familyName": "Researcher",
-            "email": "ada.researcher@university-example.eu",
-            "organisation": "University of Example",
+            "firstName": os.environ.get("SUBJECT_FIRST", "Ada"),
+            "familyName": os.environ.get("SUBJECT_LAST", "Researcher"),
+            "email": os.environ.get("SUBJECT_EMAIL", "ada.researcher@university-example.eu"),
+            "organisation": os.environ.get("SUBJECT_ORG", "University of Example"),
             "identityAttributes": ["CONSUMER", "DATA_SEARCHER"],
         },
     }

@@ -61,6 +61,41 @@ into **Keycloak 26.4**, which is the version the extension targets.
 - **The QR code needs internet.** The page loads `qrcodejs` from `cdnjs.cloudflare.com`; without it (as
   in this sandbox) only the link is shown.
 
+## Extra tests (run)
+
+### 1. A credential from an issuer that is NOT in the agent's trusted list still logs in
+
+A second credential was minted with a **different issuer key** (a fresh `did:jwk`, not the one the
+Users and Roles stand-in advertises as a trusted issuer) and a distinct identity
+(`Mallory Stranger / mallory@unknown-issuer.example`). Login **succeeded** and issued a token.
+
+Keycloak's own log shows the brokering completed — *"Generic transaction context successfully bound.
+Finalizing identity brokering step."* — so the foreign-issued credential was accepted. This confirms the
+code reading: the extension forwards only the trusted issuer's **`credentialQuery`** to the verifier and
+does **not** use the record's `issuerUri` / `keyIdentifier`, and the verifier's default policies carry no
+issuer allow-list. So **any correctly-signed credential of the accepted type logs a user in, whoever
+issued it**, unless an issuer restriction is written into the DCQL query itself. Worth flagging as a
+trust-configuration gap.
+
+(Observed en route: a foreign credential reusing an *existing* user's email reaches Keycloak's
+"Account already exists" linking page — email is the account key, see below.)
+
+### 2. Wallet login authenticates the person but grants no Simpl roles by itself
+
+The **Attribute Authenticator** (`keycloak-authenticator`, `attribute-authenticator`) — the step that
+injects `client-roles`, `identity_attributes`, `credential_id` and participant id into the token — was
+added as the `oid4vp` identity provider's **post-broker-login flow**, with its backend URLs
+(`AUTHENTICATION_PROVIDER_BASE_URL`, `USERS_ROLES_BASE_URL`, read from the environment, not per-flow
+config) pointed at the stand-in.
+
+On login the authenticator looked the wallet user up in Users and Roles **by email**
+(`GET /users?email=…`), found no such user, logged
+*"Failed to add user session notes … Error retrieving roles of user …"*, and **login still completed** —
+with only Keycloak's default roles and none of the Simpl claims. So **a fresh wallet user gets no Simpl
+authorisation**: roles and attributes come from a separate lookup of the user (by email) in the agent's
+Users and Roles / authentication-provider, and the error is non-fatal. The person must already be
+provisioned there to get any Simpl roles; the wallet only proves who they are.
+
 ## Lab shortcut
 
 The credential is signed by `mint_credential.py` (ES256, issuer `did:jwk`, W3C VC 1.1 as `jwt_vc_json`)
