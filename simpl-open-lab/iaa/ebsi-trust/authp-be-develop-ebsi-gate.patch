@@ -1,0 +1,613 @@
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/clients/EbsiTrustAdapter.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/clients/EbsiTrustAdapter.java
+new file mode 100644
+index 00000000..00352204
+--- /dev/null
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/clients/EbsiTrustAdapter.java
+@@ -0,0 +1,38 @@
++package eu.europa.ec.simpl.authenticationprovider.clients;
++
++import jakarta.validation.constraints.NotNull;
++
++public interface EbsiTrustAdapter {
++
++    /**
++     * Asks the EBSI trust service whether the Authority behind a {@code did:web} verification method is an
++     * accredited EBSI Trusted Issuer: it links a {@code did:ebsi} identity with a proof of control, and that
++     * identity is accredited in the EBSI Trusted Issuers Registry through a chain of signed accreditations up to a
++     * pinned Root TAO.
++     * @param verificationMethodId the verification method of the external Governance Authority, the issuer of the
++     *     credentials of its participants
++     * @return The outcome.
++     */
++    CheckIssuerOutcome checkIssuer(String verificationMethodId);
++
++    sealed interface CheckIssuerOutcome {
++
++        /**
++         * @param ebsiDid the {@code did:ebsi} the Authority proved it controls
++         */
++        record Trusted(@NotNull String ebsiDid) implements CheckIssuerOutcome {}
++
++        /**
++         * The service answered, and the issuer is not an accredited EBSI Trusted Issuer.
++         * @param reason for the logs only, never in a response
++         */
++        record NotTrusted(@NotNull String reason) implements CheckIssuerOutcome {}
++
++        /**
++         * The service or EBSI could not be reached, timed out, or answered something unreadable. The decision is
++         * never "trusted" then.
++         * @param reason for the logs only, never in a response
++         */
++        record Unavailable(@NotNull String reason) implements CheckIssuerOutcome {}
++    }
++}
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/clients/impl/EbsiTrustAdapterImpl.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/clients/impl/EbsiTrustAdapterImpl.java
+new file mode 100644
+index 00000000..2b765120
+--- /dev/null
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/clients/impl/EbsiTrustAdapterImpl.java
+@@ -0,0 +1,91 @@
++package eu.europa.ec.simpl.authenticationprovider.clients.impl;
++
++import com.fasterxml.jackson.databind.JsonNode;
++import com.fasterxml.jackson.databind.ObjectMapper;
++import eu.europa.ec.simpl.authenticationprovider.clients.EbsiTrustAdapter;
++import eu.europa.ec.simpl.authenticationprovider.properties.EbsiProperties;
++import java.net.http.HttpClient;
++import lombok.extern.log4j.Log4j2;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.client.JdkClientHttpRequestFactory;
++import org.springframework.stereotype.Service;
++import org.springframework.web.client.HttpStatusCodeException;
++import org.springframework.web.client.RestClient;
++import org.springframework.web.client.RestClientException;
++
++@Log4j2
++@Service
++public class EbsiTrustAdapterImpl implements EbsiTrustAdapter {
++
++    private final EbsiProperties ebsiProperties;
++    private final ObjectMapper objectMapper;
++    private final RestClient restClient;
++
++    public EbsiTrustAdapterImpl(EbsiProperties ebsiProperties, ObjectMapper objectMapper) {
++        this.ebsiProperties = ebsiProperties;
++        this.objectMapper = objectMapper;
++        if (Boolean.TRUE.equals(ebsiProperties.enabled())) {
++            var factory = new JdkClientHttpRequestFactory(
++                    HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build());
++            factory.setReadTimeout(ebsiProperties.timeout());
++            this.restClient = RestClient.builder()
++                    .baseUrl(ebsiProperties.url().toString())
++                    .requestFactory(factory)
++                    .build();
++        } else {
++            this.restClient = null;
++        }
++    }
++
++    @Override
++    public CheckIssuerOutcome checkIssuer(String verificationMethodId) {
++        if (restClient == null) {
++            return new CheckIssuerOutcome.Unavailable("EBSI accreditation check is not enabled");
++        }
++        String body;
++        try {
++            body = restClient
++                    .get()
++                    .uri(uriBuilder ->
++                            uriBuilder.path("/check-web").queryParam("vm", "{vm}").build(verificationMethodId))
++                    .retrieve()
++                    .body(String.class);
++        } catch (HttpStatusCodeException e) {
++            if (e.getStatusCode().isSameCodeAs(HttpStatus.FORBIDDEN)) {
++                log.warn("EBSI trust service rejected issuer {}: {}", verificationMethodId, reason(e.getResponseBodyAsString()));
++                return new CheckIssuerOutcome.NotTrusted(reason(e.getResponseBodyAsString()));
++            }
++            log.warn("EBSI trust service answered {} for issuer {}", e.getStatusCode().value(), verificationMethodId);
++            return new CheckIssuerOutcome.Unavailable("The EBSI trust service answered %d".formatted(e.getStatusCode().value()));
++        } catch (RestClientException | IllegalArgumentException e) {
++            log.warn("EBSI trust service could not be reached for issuer {}", verificationMethodId, e);
++            return new CheckIssuerOutcome.Unavailable(String.valueOf(e.getMessage()));
++        }
++        if (body == null || body.isBlank()) {
++            // an empty answer, such as a redirect that was not followed, is not a decision
++            log.warn("EBSI trust service answered nothing for issuer {}", verificationMethodId);
++            return new CheckIssuerOutcome.Unavailable("Empty answer from the EBSI trust service");
++        }
++        try {
++            JsonNode answer = objectMapper.readTree(body);
++            // Only an explicit {"trusted": true, "ebsiDid": "did:ebsi:..."} is a pass; anything else is not.
++            if (answer.path("trusted").isBoolean()
++                    && answer.get("trusted").booleanValue()
++                    && answer.path("ebsiDid").asText("").startsWith("did:ebsi:")) {
++                return new CheckIssuerOutcome.Trusted(answer.get("ebsiDid").asText());
++            }
++            return new CheckIssuerOutcome.NotTrusted("The EBSI trust service did not confirm the issuer");
++        } catch (Exception e) {
++            log.warn("EBSI trust service answered something unreadable for issuer {}", verificationMethodId, e);
++            return new CheckIssuerOutcome.Unavailable("Unreadable answer from the EBSI trust service");
++        }
++    }
++
++    private String reason(String body) {
++        try {
++            return objectMapper.readTree(body).path("reason").asText("rejected");
++        } catch (Exception e) {
++            return "rejected";
++        }
++    }
++}
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2.java
+index 056dca4d..3c631a28 100644
+--- a/src/main/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2.java
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2.java
+@@ -85,6 +85,8 @@ public class Tier2SessionControllerTier2V2 implements Tier2SessionsApi {
+                     .internalServerError();
+             case Tier2SessionService.CreateSessionOutcome.TrustRelationUnavailable outcome -> throw Tier2SessionProblems
+                     .internalServerError();
++            case Tier2SessionService.CreateSessionOutcome.EbsiAccreditationFailed outcome -> throw Tier2SessionProblems
++                    .internalServerError();
+             case Tier2SessionService.CreateSessionOutcome.CacheUnavailable outcome -> throw Tier2SessionProblems
+                     .internalServerError();
+         };
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/properties/EbsiProperties.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/properties/EbsiProperties.java
+new file mode 100644
+index 00000000..3b93a3f3
+--- /dev/null
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/properties/EbsiProperties.java
+@@ -0,0 +1,29 @@
++package eu.europa.ec.simpl.authenticationprovider.properties;
++
++import jakarta.validation.constraints.NotNull;
++import java.net.URI;
++import java.time.Duration;
++import org.springframework.boot.context.properties.ConfigurationProperties;
++import org.springframework.boot.context.properties.bind.DefaultValue;
++import org.springframework.validation.annotation.Validated;
++
++/**
++ * Optional EBSI accreditation gate for federated Tier 2 sessions. Kept apart from {@link SimplProperties}.
++ *
++ * @param enabled whether the issuer of a federated Tier 2 session must also be an accredited EBSI Trusted Issuer, on
++ *     top of the trust relation credential. Off by default
++ * @param url base URL of the EBSI trust service, required when enabled
++ * @param timeout how long to wait for the EBSI trust service: a cold accreditation chain walk against the EBSI pilot
++ *     took over a minute, a cached one milliseconds
++ */
++@ConfigurationProperties(prefix = "simpl.ebsi")
++@Validated
++public record EbsiProperties(
++        @DefaultValue("false") @NotNull Boolean enabled, URI url, @DefaultValue("90s") @NotNull Duration timeout) {
++
++    public EbsiProperties {
++        if (Boolean.TRUE.equals(enabled) && url == null) {
++            throw new IllegalArgumentException("simpl.ebsi.url is required when simpl.ebsi.enabled is true");
++        }
++    }
++}
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/Tier2SessionService.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/Tier2SessionService.java
+index 79aa7c5e..e44e86ad 100644
+--- a/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/Tier2SessionService.java
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/Tier2SessionService.java
+@@ -53,6 +53,14 @@ public interface Tier2SessionService {
+          */
+         record TrustRelationUnavailable(String issuer) implements CreateSessionOutcome {}
+ 
++        /**
++         * EBSI accreditation of the issuer is required ({@code simpl.ebsi.enabled}) and could not be established:
++         * the issuer is not an accredited EBSI Trusted Issuer, or the EBSI trust service was unavailable. Nothing is
++         * cached.
++         * @param reason for the logs only, never in a response
++         */
++        record EbsiAccreditationFailed(String issuer, String reason) implements CreateSessionOutcome {}
++
+         /**
+          * The session cache could not be read or written. Nothing is cached.
+          */
+diff --git a/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImpl.java b/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImpl.java
+index 14769200..63950447 100644
+--- a/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImpl.java
++++ b/src/main/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImpl.java
+@@ -1,9 +1,11 @@
+ package eu.europa.ec.simpl.authenticationprovider.services.impl;
+ 
++import eu.europa.ec.simpl.authenticationprovider.clients.EbsiTrustAdapter;
+ import eu.europa.ec.simpl.authenticationprovider.clients.TrustRelationCredentialAdapter;
+ import eu.europa.ec.simpl.authenticationprovider.clients.TrustRelationCredentialAdapter.FetchTrustRelationCredentialOutcome;
+ import eu.europa.ec.simpl.authenticationprovider.entities.redis.Tier2SessionHash;
+ import eu.europa.ec.simpl.authenticationprovider.helpers.GovernanceAuthority;
++import eu.europa.ec.simpl.authenticationprovider.properties.EbsiProperties;
+ import eu.europa.ec.simpl.authenticationprovider.properties.SimplProperties;
+ import eu.europa.ec.simpl.authenticationprovider.repositories.Tier2SessionRepository;
+ import eu.europa.ec.simpl.authenticationprovider.services.Tier2SessionService;
+@@ -52,6 +54,8 @@ public class Tier2SessionServiceImpl implements Tier2SessionService {
+     private final StringRedisTemplate stringRedisTemplate;
+     private final VerifiablePresentationVerificationService verifiablePresentationVerificationService;
+     private final TrustRelationCredentialAdapter trustRelationCredentialAdapter;
++    private final EbsiTrustAdapter ebsiTrustAdapter;
++    private final EbsiProperties ebsiProperties;
+     private final GovernanceAuthority governanceAuthority;
+     private final ParticipantCredentialCodec participantCredentialCodec;
+     private final StringCodec<Identity> identityCodec;
+@@ -209,6 +213,10 @@ public class Tier2SessionServiceImpl implements Tier2SessionService {
+                                 issuer);
+                         return new CreateSessionOutcome.TrustRelationUnavailable(issuer);
+                     }
++                    var ebsiFailure = ebsiAccreditationFailure(sessionId, issuer);
++                    if (ebsiFailure.isPresent()) {
++                        return ebsiFailure.get();
++                    }
+                     var mappings = remoteIdentityAttributes(found.credential());
+                     session.setFederated(Boolean.TRUE)
+                             .setIdentityAttributes(mappedIdentityAttributes(identityAttributes, mappings))
+@@ -403,6 +411,39 @@ public class Tier2SessionServiceImpl implements Tier2SessionService {
+      * @return true when the trust relation credential trusts the dataspace of the issuer, whatever verification method
+      *     of its DID it names
+      */
++    /**
++     * When {@code simpl.ebsi.enabled}, the federated issuer must also be an accredited EBSI Trusted Issuer: an
++     * addition to the trust relation credential, never a replacement. Fails closed: an unavailable EBSI trust
++     * service is a failure, not a pass.
++     */
++    private Optional<CreateSessionOutcome> ebsiAccreditationFailure(String sessionId, String issuer) {
++        if (!Boolean.TRUE.equals(ebsiProperties.enabled())) {
++            return Optional.empty();
++        }
++        return switch (ebsiTrustAdapter.checkIssuer(issuer)) {
++            case EbsiTrustAdapter.CheckIssuerOutcome.Trusted trusted -> {
++                log.info("Tier 2 session {}: issuer {} is EBSI-accredited as {}", sessionId, issuer, trusted.ebsiDid());
++                yield Optional.empty();
++            }
++            case EbsiTrustAdapter.CheckIssuerOutcome.NotTrusted notTrusted -> {
++                log.warn(
++                        "Tier 2 session {} not created: issuer {} is not an accredited EBSI Trusted Issuer: {}",
++                        sessionId,
++                        issuer,
++                        notTrusted.reason());
++                yield Optional.of(new CreateSessionOutcome.EbsiAccreditationFailed(issuer, notTrusted.reason()));
++            }
++            case EbsiTrustAdapter.CheckIssuerOutcome.Unavailable unavailable -> {
++                log.warn(
++                        "Tier 2 session {} not created: EBSI accreditation of issuer {} unavailable: {}",
++                        sessionId,
++                        issuer,
++                        unavailable.reason());
++                yield Optional.of(new CreateSessionOutcome.EbsiAccreditationFailed(issuer, unavailable.reason()));
++            }
++        };
++    }
++
+     private static boolean isTrusted(
+             VerifiableCredential<TrustRelationCredentialSubject> trustRelationCredential, String issuer) {
+         var subject = trustRelationCredential.getCredentialSubject();
+diff --git a/src/test/java/eu/europa/ec/simpl/authenticationprovider/clients/impl/EbsiTrustAdapterImplTest.java b/src/test/java/eu/europa/ec/simpl/authenticationprovider/clients/impl/EbsiTrustAdapterImplTest.java
+new file mode 100644
+index 00000000..7a9dc332
+--- /dev/null
++++ b/src/test/java/eu/europa/ec/simpl/authenticationprovider/clients/impl/EbsiTrustAdapterImplTest.java
+@@ -0,0 +1,162 @@
++package eu.europa.ec.simpl.authenticationprovider.clients.impl;
++
++import static org.assertj.core.api.Assertions.assertThat;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++import com.sun.net.httpserver.HttpServer;
++import eu.europa.ec.simpl.authenticationprovider.clients.EbsiTrustAdapter.CheckIssuerOutcome;
++import eu.europa.ec.simpl.authenticationprovider.properties.EbsiProperties;
++import java.net.InetSocketAddress;
++import java.net.URI;
++import java.net.URLDecoder;
++import java.nio.charset.StandardCharsets;
++import java.time.Duration;
++import java.util.concurrent.atomic.AtomicReference;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++class EbsiTrustAdapterImplTest {
++
++    // a real did:web verification method: a port-encoded host, a path and a fragment
++    private static final String ISSUER = "did:web:authority.example%3A8443:gov#key-1";
++
++    private HttpServer server;
++    private final AtomicReference<String> rawRequest = new AtomicReference<>();
++    private int status;
++    private String body;
++    private String location;
++
++    @BeforeEach
++    void startServer() throws Exception {
++        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
++        server.createContext("/", exchange -> {
++            rawRequest.set(exchange.getRequestURI().getRawPath() + "?" + exchange.getRequestURI().getRawQuery());
++            if (location != null) {
++                exchange.getResponseHeaders().add("Location", location);
++            }
++            var bytes = body.getBytes(StandardCharsets.UTF_8);
++            exchange.sendResponseHeaders(status, status == 302 ? -1 : bytes.length);
++            if (status != 302) {
++                exchange.getResponseBody().write(bytes);
++            }
++            exchange.close();
++        });
++        server.start();
++        location = null;
++    }
++
++    @AfterEach
++    void stopServer() {
++        server.stop(0);
++    }
++
++    private EbsiTrustAdapterImpl adapter() {
++        return new EbsiTrustAdapterImpl(
++                new EbsiProperties(true, URI.create("http://127.0.0.1:" + server.getAddress().getPort()), Duration.ofSeconds(5)),
++                new ObjectMapper());
++    }
++
++    @Test
++    void checkIssuerGivenAnAccreditedIssuerShouldBeTrustedAndSendTheVerificationMethodIntact() {
++        status = 200;
++        body = "{\"trusted\":true,\"ebsiDid\":\"did:ebsi:zAuthority\",\"chain\":[]}";
++
++        var outcome = adapter().checkIssuer(ISSUER);
++
++        assertThat(outcome).isEqualTo(new CheckIssuerOutcome.Trusted("did:ebsi:zAuthority"));
++        var raw = rawRequest.get();
++        assertThat(raw).startsWith("/check-web?vm=");
++        // what the EBSI trust service decodes is exactly the verification method: '#' and '%3A' survive
++        assertThat(URLDecoder.decode(raw.substring("/check-web?vm=".length()), StandardCharsets.UTF_8))
++                .isEqualTo(ISSUER);
++    }
++
++    @Test
++    void checkIssuerGivenARejectionShouldBeNotTrustedWithTheReason() {
++        status = 403;
++        body = "{\"trusted\":false,\"reason\":\"EBSI identity link proof signature does not verify\"}";
++
++        assertThat(adapter().checkIssuer(ISSUER))
++                .isEqualTo(new CheckIssuerOutcome.NotTrusted("EBSI identity link proof signature does not verify"));
++    }
++
++    @Test
++    void checkIssuerGivenA200ThatDoesNotSayTrustedShouldNotBeTrusted() {
++        status = 200;
++        body = "{\"trusted\":false,\"ebsiDid\":\"did:ebsi:zAuthority\"}";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.NotTrusted.class);
++    }
++
++    // only an explicit trusted=true with a did:ebsi is a pass
++    @Test
++    void checkIssuerGivenTrustedWithoutAnEbsiDidShouldNotBeTrusted() {
++        status = 200;
++        body = "{\"trusted\":true,\"ebsiDid\":\"did:web:evil.example\"}";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.NotTrusted.class);
++    }
++
++    @Test
++    void checkIssuerGivenTrustedAsAStringShouldNotBeTrusted() {
++        status = 200;
++        body = "{\"trusted\":\"true\",\"ebsiDid\":\"did:ebsi:zAuthority\"}";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.NotTrusted.class);
++    }
++
++    @Test
++    void checkIssuerGivenAnUnavailableEbsiShouldBeUnavailableNeverTrusted() {
++        status = 503;
++        body = "{\"trusted\":false,\"reason\":\"unavailable\"}";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.Unavailable.class);
++    }
++
++    @Test
++    void checkIssuerGivenAServerErrorShouldBeUnavailable() {
++        status = 500;
++        body = "{}";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.Unavailable.class);
++    }
++
++    @Test
++    void checkIssuerGivenAnUnreadableAnswerShouldBeUnavailable() {
++        status = 200;
++        body = "<html>not json</html>";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.Unavailable.class);
++    }
++
++    @Test
++    void checkIssuerGivenARedirectShouldNotFollowItAndBeUnavailable() {
++        status = 302;
++        body = "";
++        location = "http://127.0.0.1:1/elsewhere";
++
++        assertThat(adapter().checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.Unavailable.class);
++    }
++
++    @Test
++    void checkIssuerGivenNothingListeningShouldBeUnavailable() {
++        var adapter = adapter();
++        server.stop(0);
++
++        assertThat(adapter.checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.Unavailable.class);
++    }
++
++    @Test
++    void checkIssuerGivenEbsiDisabledShouldBeUnavailableNeverTrusted() {
++        var disabled = new EbsiTrustAdapterImpl(new EbsiProperties(false, null, Duration.ofSeconds(5)), new ObjectMapper());
++
++        assertThat(disabled.checkIssuer(ISSUER)).isInstanceOf(CheckIssuerOutcome.Unavailable.class);
++    }
++
++    @Test
++    void ebsiPropertiesGivenEnabledWithoutAUrlShouldBeRejected() {
++        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new EbsiProperties(true, null, Duration.ofSeconds(5)))
++                .isInstanceOf(IllegalArgumentException.class);
++    }
++}
+diff --git a/src/test/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2MockMvcTest.java b/src/test/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2MockMvcTest.java
+index 7a0edee9..b4d6a519 100644
+--- a/src/test/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2MockMvcTest.java
++++ b/src/test/java/eu/europa/ec/simpl/authenticationprovider/controllers/Tier2SessionControllerTier2V2MockMvcTest.java
+@@ -108,6 +108,8 @@ class Tier2SessionControllerTier2V2MockMvcTest {
+     static Stream<CreateSessionOutcome> unavailableOutcomes() {
+         return Stream.of(
+                 new CreateSessionOutcome.TrustRelationUnavailable("did:web:t1.authority.other#key"),
++                new CreateSessionOutcome.EbsiAccreditationFailed(
++                        "did:web:t1.authority.other#key", "links no EBSI identity"),
+                 new CreateSessionOutcome.VerificationUnavailable("DID document unreachable"),
+                 new CreateSessionOutcome.CacheUnavailable("Connection refused"));
+     }
+diff --git a/src/test/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImplTest.java b/src/test/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImplTest.java
+index 2357d90f..f38dc0b9 100644
+--- a/src/test/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImplTest.java
++++ b/src/test/java/eu/europa/ec/simpl/authenticationprovider/services/impl/Tier2SessionServiceImplTest.java
+@@ -11,10 +11,13 @@ import static org.mockito.Mockito.inOrder;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.never;
+ 
++import eu.europa.ec.simpl.authenticationprovider.clients.EbsiTrustAdapter;
++import eu.europa.ec.simpl.authenticationprovider.clients.EbsiTrustAdapter.CheckIssuerOutcome;
+ import eu.europa.ec.simpl.authenticationprovider.clients.TrustRelationCredentialAdapter;
+ import eu.europa.ec.simpl.authenticationprovider.clients.TrustRelationCredentialAdapter.FetchTrustRelationCredentialOutcome;
+ import eu.europa.ec.simpl.authenticationprovider.entities.redis.Tier2SessionHash;
+ import eu.europa.ec.simpl.authenticationprovider.helpers.GovernanceAuthority;
++import eu.europa.ec.simpl.authenticationprovider.properties.EbsiProperties;
+ import eu.europa.ec.simpl.authenticationprovider.properties.SimplProperties;
+ import eu.europa.ec.simpl.authenticationprovider.repositories.Tier2SessionRepository;
+ import eu.europa.ec.simpl.authenticationprovider.services.Tier2SessionService.CheckSessionArgs;
+@@ -100,6 +103,10 @@ class Tier2SessionServiceImplTest {
+             mock(VerifiablePresentationVerificationService.class);
+     private final TrustRelationCredentialAdapter trustRelationCredentialAdapter =
+             mock(TrustRelationCredentialAdapter.class);
++    private final EbsiTrustAdapter ebsiTrustAdapter = mock(EbsiTrustAdapter.class);
++    private static final EbsiProperties EBSI_OFF = new EbsiProperties(false, null, Duration.ofSeconds(90));
++    private static final EbsiProperties EBSI_ON =
++            new EbsiProperties(true, URI.create("http://ebsi-trust.test"), Duration.ofSeconds(90));
+ 
+     @SuppressWarnings("unchecked")
+     private final StringCodec<Identity> identityCodec = mock(StringCodec.class);
+@@ -125,11 +132,17 @@ class Tier2SessionServiceImplTest {
+         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+                 .willReturn(true);
+-        service = new Tier2SessionServiceImpl(
++        service = serviceWith(EBSI_OFF);
++    }
++
++    private Tier2SessionServiceImpl serviceWith(EbsiProperties ebsiProperties) {
++        return new Tier2SessionServiceImpl(
+                 tier2SessionRepository,
+                 stringRedisTemplate,
+                 verificationService,
+                 trustRelationCredentialAdapter,
++                ebsiTrustAdapter,
++                ebsiProperties,
+                 new GovernanceAuthority(AUTHORITY_TIER_ONE_URL),
+                 new ParticipantCredentialCodec(),
+                 identityCodec,
+@@ -137,6 +150,99 @@ class Tier2SessionServiceImplTest {
+                 InstantSource.fixed(NOW));
+     }
+ 
++    // ---- EBSI accreditation gate (federated issuers only, in addition to the trust relation credential) ----
++
++    private void federatedSessionWithTrustRelation() {
++        given(verificationService.verify(any(), any())).willReturn(verified(null));
++        given(trustRelationCredentialAdapter.fetchTrustRelationCredential(EXTERNAL_ISSUER))
++                .willReturn(new FetchTrustRelationCredentialOutcome.Found(trustRelationCredential(List.of())));
++    }
++
++    @Test
++    void createSessionGivenEbsiDisabledShouldNeverAskTheEbsiTrustService() {
++        var credential = credential(EXTERNAL_ISSUER, null, List.of(CONSUMER));
++        federatedSessionWithTrustRelation();
++
++        var outcome = service.createSession(args(presentation(null, credential.getCompact())));
++
++        assertThat(outcome).isInstanceOf(CreateSessionOutcome.Created.class);
++        then(ebsiTrustAdapter).shouldHaveNoInteractions();
++    }
++
++    @Test
++    void createSessionGivenEbsiEnabledAndAnAccreditedFederatedIssuerShouldCacheTheSession() {
++        service = serviceWith(EBSI_ON);
++        var credential = credential(EXTERNAL_ISSUER, null, List.of(CONSUMER));
++        federatedSessionWithTrustRelation();
++        given(ebsiTrustAdapter.checkIssuer(EXTERNAL_ISSUER))
++                .willReturn(new CheckIssuerOutcome.Trusted("did:ebsi:zAccreditedAuthority"));
++
++        var outcome = service.createSession(args(presentation(null, credential.getCompact())));
++
++        assertThat(outcome).isInstanceOf(CreateSessionOutcome.Created.class);
++        assertThat(savedSession().getFederated()).isTrue();
++    }
++
++    @Test
++    void createSessionGivenEbsiEnabledAndAnIssuerThatIsNotAccreditedShouldNotCacheTheSession() {
++        service = serviceWith(EBSI_ON);
++        var credential = credential(EXTERNAL_ISSUER, null, List.of(CONSUMER));
++        federatedSessionWithTrustRelation();
++        given(ebsiTrustAdapter.checkIssuer(EXTERNAL_ISSUER))
++                .willReturn(new CheckIssuerOutcome.NotTrusted("links no EBSI identity"));
++
++        var outcome = service.createSession(args(presentation(null, credential.getCompact())));
++
++        assertThat(outcome)
++                .isEqualTo(new CreateSessionOutcome.EbsiAccreditationFailed(EXTERNAL_ISSUER, "links no EBSI identity"));
++        then(tier2SessionRepository).should(never()).save(any());
++    }
++
++    // fail closed: an EBSI trust service that cannot answer is never a pass
++    @Test
++    void createSessionGivenEbsiEnabledAndTheEbsiTrustServiceUnavailableShouldNotCacheTheSession() {
++        service = serviceWith(EBSI_ON);
++        var credential = credential(EXTERNAL_ISSUER, null, List.of(CONSUMER));
++        federatedSessionWithTrustRelation();
++        given(ebsiTrustAdapter.checkIssuer(EXTERNAL_ISSUER))
++                .willReturn(new CheckIssuerOutcome.Unavailable("Connection refused"));
++
++        var outcome = service.createSession(args(presentation(null, credential.getCompact())));
++
++        assertThat(outcome)
++                .isEqualTo(new CreateSessionOutcome.EbsiAccreditationFailed(EXTERNAL_ISSUER, "Connection refused"));
++        then(tier2SessionRepository).should(never()).save(any());
++    }
++
++    // EBSI accreditation adds to the trust relation, it never replaces it
++    @Test
++    void createSessionGivenEbsiEnabledAndNoTrustRelationCredentialShouldStillRefuseAnAccreditedIssuer() {
++        service = serviceWith(EBSI_ON);
++        var credential = credential(EXTERNAL_ISSUER, null, List.of(CONSUMER));
++        given(verificationService.verify(any(), any())).willReturn(verified(null));
++        given(trustRelationCredentialAdapter.fetchTrustRelationCredential(EXTERNAL_ISSUER))
++                .willReturn(new FetchTrustRelationCredentialOutcome.NotFound());
++        given(ebsiTrustAdapter.checkIssuer(EXTERNAL_ISSUER)).willReturn(new CheckIssuerOutcome.Trusted("did:ebsi:z1"));
++
++        var outcome = service.createSession(args(presentation(null, credential.getCompact())));
++
++        assertThat(outcome).isEqualTo(new CreateSessionOutcome.TrustRelationUnavailable(EXTERNAL_ISSUER));
++        then(tier2SessionRepository).should(never()).save(any());
++    }
++
++    // the Authority's own participants are trusted by definition: no EBSI check
++    @Test
++    void createSessionGivenEbsiEnabledAndAnInternalIssuerShouldNotAskTheEbsiTrustService() {
++        service = serviceWith(EBSI_ON);
++        var credential = credential(INTERNAL_ISSUER, NOW.plus(Duration.ofDays(30)), List.of(CONSUMER));
++        given(verificationService.verify(any(), any())).willReturn(verified(null));
++
++        var outcome = service.createSession(args(presentation(NOW.plus(Duration.ofDays(10)), credential.getCompact())));
++
++        assertThat(outcome).isInstanceOf(CreateSessionOutcome.Created.class);
++        then(ebsiTrustAdapter).shouldHaveNoInteractions();
++    }
++
+     @Test
+     void createSessionGivenAnInternalIssuerShouldCacheTheParticipantCredentialAttributes() {
+         var credential = credential(INTERNAL_ISSUER, NOW.plus(Duration.ofDays(30)), List.of(CONSUMER, PROVIDER));

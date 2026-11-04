@@ -6,6 +6,8 @@
 #   ./run.sh verifier  same credential through the real verifier2 with / without the EBSI policy
 #                      (needs the ssi-login stack: wallet2 :7006, verifier2 :7004 — see ../ssi-login/run.sh)
 #   ./run.sh login     the full Keycloak wallet login with the EBSI policy on (needs ../ssi-login/run.sh up)
+#   ./run.sh tier2     Tier 2: 19 link tests + 3 HTTP-contract checks (did:web authority -> did:ebsi -> chain)
+#   ./run.sh java DIR  Tier 2 Java: authp-be (develop + authp-be-develop-ebsi-gate.patch) EBSI adapter tests, offline
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; RUN="${RUN:-/root/simpl-open-lab-work/ssi-run}"
 start_webhook() {
@@ -14,11 +16,13 @@ start_webhook() {
 }
 case "${1:-tests}" in
   tests)    python3 "$HERE/test_chain.py" ;;
+  tier2)    python3 "$HERE/test_link.py" ;;
+  java)     "$HERE/adapter-check/run.sh" "${2:?authp-be checkout with the patch applied}" ;;
   live)     start_webhook; curl -s -m 300 "localhost:8091/check?did=${2:?did:ebsi:...}" | python3 -m json.tool ;;
   verifier) start_webhook; python3 "$HERE/e2e_verifier2.py" ;;
   login)    start_webhook
             EBSI_WEBHOOK=http://127.0.0.1:8091/verify \
               nohup python3 "$HERE/../ssi-login/trusted_issuers_stub.py" 8082 "$RUN/issuer.did" > "$RUN/users-roles.log" 2>&1 &
             NODE_PATH=$(npm root -g) node "$HERE/../ssi-login/login.js" "$(cat "$RUN/ebsi-wid")" "$RUN/shots-ebsi" ;;
-  *) sed -n 2,9p "$0" ;;
+  *) sed -n 2,11p "$0" ;;
 esac

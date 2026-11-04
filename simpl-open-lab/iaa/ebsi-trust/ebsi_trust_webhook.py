@@ -106,22 +106,22 @@ def verification_key(kid):
     raise Reject(f"key {kid} is not in the DID document of {did}")
 
 
-def verify_jws(compact, jwk):
+def verify_jws(compact, jwk, what="accreditation"):
     h, p, s = compact.split(".")
     alg = json.loads(b64d(h)).get("alg")
     curve = {"ES256": ec.SECP256R1(), "ES256K": ec.SECP256K1()}.get(alg)
     if curve is None or jwk.get("kty") != "EC":
-        raise Reject(f"unsupported accreditation signature algorithm {alg!r}")
+        raise Reject(f"unsupported {what} signature algorithm {alg!r}")
     pub = ec.EllipticCurvePublicNumbers(int.from_bytes(b64d(jwk["x"]), "big"),
                                         int.from_bytes(b64d(jwk["y"]), "big"), curve).public_key()
     sig = b64d(s)
     if len(sig) != 64:
-        raise Reject("malformed accreditation signature")
+        raise Reject(f"malformed {what} signature")
     try:
         pub.verify(encode_dss_signature(int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big")),
                    f"{h}.{p}".encode(), ec.ECDSA(hashes.SHA256()))
     except InvalidSignature:
-        raise Reject("accreditation signature does not verify against the accrediting authority's key")
+        raise Reject(f"{what} signature does not verify against the registered key")
 
 
 def attributes(did):
@@ -203,6 +203,105 @@ def check_issuer(did):
     return walk(did)
 
 
+# ---- Tier 2: a foreign authority's issuer is a did:web (X.509-backed), EBSI only knows did:ebsi ----------------
+# The authority links the two: its did:web document carries a `LinkedEbsiIdentity` service whose endpoint is
+# {"ebsiDid": "did:ebsi:...", "proof": "<JWS signed by a key of that did:ebsi, subject = this did:web>"}.
+# Claiming a public did:ebsi proves nothing, so the proof (control of the EBSI DID) is verified before the
+# EBSI chain walk. This linkage format is the lab's own; EBSI/Simpl define none.
+DID_WEB = re.compile(r"^did:web:[A-Za-z0-9.\-]+(?:%3[Aa]\d{1,5})?(?::[A-Za-z0-9._~\-]+)*$")
+MAX_DOC = 256 * 1024
+
+
+def allow_local():
+    """Lab only: let did:web point at localhost over http. Never set in production."""
+    return os.environ.get("EBSI_DIDWEB_ALLOW_LOCAL") == "1"
+
+
+def did_web_url(did):
+    if not DID_WEB.match(did):
+        raise Reject(f"{did!r} is not a valid did:web")
+    host, *path = [urllib.parse.unquote(p) for p in did[len("did:web:"):].split(":")]
+    name = host.rsplit(":", 1)[0] if re.search(r":\d+$", host) else host
+    local = name in ("localhost", "127.0.0.1")
+    if local and not allow_local():
+        raise Reject("did:web host is local")
+    if not local:  # SSRF guard: the issuer comes from a presentation by a not-yet-trusted participant
+        import ipaddress
+        import socket
+        try:
+            addrs = {a[4][0] for a in socket.getaddrinfo(name, None)}
+        except OSError as e:
+            raise Upstream(f"cannot resolve {name}: {e}")
+        for a in addrs:
+            ip = ipaddress.ip_address(a)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                raise Reject(f"did:web host {name} resolves to a non-public address")
+    return f"{'http' if local else 'https'}://{host}/{'/'.join(path) + '/' if path else '.well-known/'}did.json"
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def fetch_did_web(did):
+    url = did_web_url(did)
+    opener = urllib.request.build_opener(_NoRedirect, *([urllib.request.ProxyHandler({})] if url.startswith("http://") else []))
+    try:
+        with opener.open(urllib.request.Request(url, headers={"Accept": "application/did+json, application/json"}), timeout=TIMEOUT) as r:
+            raw = r.read(MAX_DOC + 1)
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 410):
+            raise Reject(f"{did} has no DID document ({e.code})")
+        raise Upstream(f"{url} -> HTTP {e.code}")  # includes 3xx: redirects are refused
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise Upstream(f"{url} -> {e}")
+    if len(raw) > MAX_DOC:
+        raise Reject("did:web document too large")
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        raise Reject("did:web document is not JSON")
+    if not isinstance(doc, dict) or doc.get("id") != did:  # bind the document to the DID asked for
+        raise Reject(f"did:web document is for {doc.get('id') if isinstance(doc, dict) else None!r}, not {did}")
+    return doc
+
+
+def linked_ebsi_did(web_did, doc):
+    """The did:ebsi the authority proves it controls, or Reject."""
+    claimed = {x for x in doc.get("alsoKnownAs", []) if isinstance(x, str) and x.startswith("did:ebsi:")}
+    links = [s.get("serviceEndpoint") for s in doc.get("service", [])
+             if isinstance(s, dict) and s.get("type") == "LinkedEbsiIdentity" and isinstance(s.get("serviceEndpoint"), dict)]
+    if not links:
+        raise Reject(f"{web_did} links no EBSI identity")
+    ep = links[0]
+    ebsi, proof = ep.get("ebsiDid"), ep.get("proof")
+    if not isinstance(ebsi, str) or not DID_EBSI.match(ebsi) or not isinstance(proof, str) or proof.count(".") != 2:
+        raise Reject("malformed EBSI identity link")
+    if claimed and ebsi not in claimed:
+        raise Reject("alsoKnownAs and the EBSI identity link name different DIDs")
+    header, payload = json.loads(b64d(proof.split(".")[0])), json.loads(b64d(proof.split(".")[1]))
+    kid = header.get("kid", "")
+    if kid.split("#")[0] != ebsi or payload.get("iss") != ebsi:
+        raise Reject("link proof is not issued by the linked EBSI DID")
+    if payload.get("sub") != web_did:
+        raise Reject("link proof is for a different did:web")
+    if payload.get("exp", 0) <= time.time():
+        raise Reject("link proof expired")
+    verify_jws(proof, verification_key(kid), what="EBSI identity link proof")
+    return ebsi
+
+
+def check_web(verification_method):
+    """Tier 2: is the authority behind this did:web verification method an EBSI-accredited Trusted Issuer?"""
+    web_did = (verification_method or "").split("#")[0]
+    if not web_did.startswith("did:web:"):
+        raise Reject(f"issuer {verification_method!r} is not a did:web")
+    ebsi = linked_ebsi_did(web_did, fetch_did_web(web_did))
+    did_doc(ebsi)
+    return {"didWeb": web_did, "ebsiDid": ebsi, "chain": walk(ebsi)}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
@@ -224,6 +323,18 @@ class Handler(BaseHTTPRequestHandler):
             print(f"[ebsi-trust] UPSTREAM {did}  {e}  (fail closed)", flush=True)
             self._send(503, {"trusted": False, "issuer": did, "reason": f"EBSI unavailable: {e}"})
 
+    def _decide_web(self, vm):
+        try:
+            ev = check_web(vm)
+            print(f"[ebsi-trust] TRUSTED  {vm}  = {ev['ebsiDid']}  via {' -> '.join(h['issuerType'] for h in ev['chain'])}", flush=True)
+            self._send(200, {"trusted": True, "issuer": vm, **ev})
+        except Reject as e:
+            print(f"[ebsi-trust] REJECT   {vm}  {e}", flush=True)
+            self._send(403, {"trusted": False, "issuer": vm, "reason": str(e)})
+        except Upstream as e:
+            print(f"[ebsi-trust] UPSTREAM {vm}  {e}  (fail closed)", flush=True)
+            self._send(503, {"trusted": False, "issuer": vm, "reason": f"unavailable: {e}"})
+
     def do_POST(self):
         try:
             cred = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
@@ -240,6 +351,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "ebsi": BASE, "pinned_roots": sorted(ROOTS)})
         if u.path == "/check":
             return self._decide(urllib.parse.parse_qs(u.query).get("did", [""])[0])
+        if u.path == "/check-web":  # Tier 2: ?vm=did:web:...#key
+            return self._decide_web(urllib.parse.parse_qs(u.query).get("vm", [""])[0])
         self.send_error(404)
 
     def log_message(self, *a):

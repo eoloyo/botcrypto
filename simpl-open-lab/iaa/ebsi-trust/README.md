@@ -85,7 +85,91 @@ credential from **any** issuer used to log a user in.
   configurable, is open. A credential claiming a real pilot TI but signed with a foreign key therefore failed
   with `Could not resolve issuer key`, which does not distinguish "no support" from "sandbox TLS".
 - Not covered: credential **revocation/status**, matching `accreditedFor` to the credential type (an EBSI TI
-  accredited for diplomas is accepted for a Simpl membership credential), Tier-2 (`authp-be`, X.509/mTLS
-  — untouched), and mapping an EBSI credential to Simpl roles (the wallet login still grants none, see
-  `../ssi-login`).
+  accredited for diplomas is accepted for a Simpl membership credential), and mapping an EBSI credential to
+  Simpl roles (the wallet login still grants none, see `../ssi-login`). Tier 2 is the next section.
 - The webhook is a sidecar, not Simpl-native; it is a lab implementation, not hardened for production.
+
+---
+
+# Tier 2 — agent-to-agent (`authp-be`, `develop`)
+
+```bash
+./run.sh tier2                      # 19 link tests + 3 HTTP-contract checks against a stub EBSI + did:web host
+./run.sh java <authp-be checkout>   # Java adapter: 12 tests + 4 against the real sidecar (offline, see below)
+git apply authp-be-develop-ebsi-gate.patch   # the Java change, against origin/develop (60bdc8e0)
+```
+
+## How Tier-2 trust works today (read from `develop`, not assumed)
+
+A participant presents a VP whose `ParticipantCredential` is issued by a **`did:web` Authority** and signed
+with an **X.509 certificate** the DID document points at (`x5u`). `VerifiablePresentationVerificationService`
+checks signatures and expiry only — its Javadoc: *"no trust decision on the issuers: a Verified presentation
+may still come from an untrusted issuer"*. The decision is in `Tier2SessionServiceImpl.createVerifiedSession`:
+the **local** Governance Authority's issuer is trusted; any other issuer is **federated**, and the agent asks
+**its own GA** for a `TrustRelationCredential` naming that issuer (directed, not transitive).
+
+## The mismatch, and the design choice it forced
+
+The issuer is a `did:web`; EBSI's registries only hold `did:ebsi`. So EBSI cannot judge the issuer directly:
+something must **link** the two, and a bare claim of a public `did:ebsi` proves nothing. Neither Simpl nor EBSI
+defines such a link, so this is **the lab's own format**, a decision to be confirmed, not a standard:
+
+> the Authority's `did:web` document carries a `LinkedEbsiIdentity` service whose endpoint is
+> `{"ebsiDid": "did:ebsi:…", "proof": "<JWS signed by a key of that did:ebsi, subject = this did:web>"}`.
+
+The sidecar's new `GET /check-web?vm=did:web:…#key` fetches the DID document, verifies the proof against the
+EBSI DID's registered key (so claiming someone else's accredited identity fails), then runs the same
+`TI → TAO → Root TAO` walk as Tier 1. Alternatives not built: the Authority re-issues from a `did:ebsi`; or
+EBSI is used only as admission evidence when the GA creates the trust relation.
+
+The issuer string comes from a presentation by a **not-yet-trusted participant**, so fetching its `did:web`
+host is attacker-steered: the sidecar allows only public hosts (resolved IPs checked), refuses redirects, caps
+the body at 256 KiB, binds the document to the DID asked for, and validates the DID syntax.
+
+## Where it sits in `authp-be`
+
+In the federated branch, **after** the trust-relation check and before attributes are mapped. It is **in
+addition to** the `TrustRelationCredential`, never instead of it; the local GA's own participants are not
+asked; **off by default**; **fail closed** (an unavailable EBSI service is a refusal). New code: `EbsiTrustAdapter`
+(+ `Impl`, a Spring `RestClient`, redirects refused, only an explicit `trusted:true` with a `did:ebsi` passes),
+`EbsiProperties` (`simpl.ebsi.enabled|url|timeout`, a separate record because five tests construct
+`SimplProperties` by hand), a `CreateSessionOutcome.EbsiAccreditationFailed` case, and its controller case. It
+maps to the same generic 500 as `TrustRelationUnavailable` (the module's convention: no detail to the caller).
+
+## Results
+
+| Check | Result |
+|---|---|
+| Link tests: valid link; no link; **claims an accredited TI's DID but cannot sign as it**; proof replayed from another authority; proof expired; `alsoKnownAs` ≠ link; proof not from the linked DID; linked DID not accredited; forged TAO behind a valid link; DID document for another DID; redirect; oversized; localhost/private host (SSRF); path-traversal DID; not a `did:web`; EBSI down; did:web host down | **19 / 19** (Tier-1 chain tests still 14 / 14) |
+| Sidecar over HTTP, called with the percent-encoding the Java client produces: 200 / 403 / 503 | 3 / 3 |
+| Java `EbsiTrustAdapterImplTest` (JDK `HttpServer`): trusted, rejected + reason, `trusted:false`, `trusted:true` without a `did:ebsi`, `trusted:"true"`, 503, 500, unreadable body, redirect, nothing listening, disabled; `#` and `%3A` survive to the decoded `vm` | **12 / 12** |
+| Java adapter ↔ **real Python sidecar** (stub EBSI + did:web host): accredited → trusted; unlinked and stolen-identity → not trusted with the sidecar's own reason; sidecar down → unavailable | **4 / 4** |
+| Patch applies to a clean `origin/develop` | yes |
+
+**Not run: the `Tier2SessionServiceImpl` change and its tests.** The gate itself, six new cases in
+`Tier2SessionServiceImplTest` (disabled → never asked; accredited → cached; not accredited → refused;
+**EBSI unavailable → refused**; **accredited issuer but no trust relation → still refused**; local issuer →
+never asked) and the controller mapping case are written but **were not compiled or run**: `develop` needs
+`simpl-parent:3.3.0-SNAPSHOT` and a large dependency graph from the GitLab package registry, which Maven
+resolved here at about five artifacts a minute (20+ minutes, no jars), so the build never reached compilation.
+Checked by reading against the module's types only. To run them where the registry is reachable:
+
+```bash
+git apply authp-be-develop-ebsi-gate.patch      # in an authp-be checkout of origin/develop
+mvn test -Dtest='Tier2SessionServiceImplTest,Tier2SessionControllerTier2V2MockMvcTest,EbsiTrustAdapterImplTest'
+```
+
+## Not done / not shown — read before relying on this
+
+- **No Tier-2 session was run end to end** with two real `develop` agents; a real EBSI-accredited authority with a
+  published link cannot be produced either (we hold no key of an EBSI-registered issuer). The live-EBSI evidence
+  is the Tier-1 run; Tier 2 is verified against a stub EBSI whose chains are really signed.
+- **The link binds identities, not keys**: it proves the `did:web` controller also controls the accredited
+  `did:ebsi`; it does not tie the X.509 issuer key to an EBSI key.
+- **Sessions are cached**, so a later EBSI withdrawal of an accreditation is not seen until the session expires.
+- **Latency**: a cold chain walk took 66–80 s on the pilot; `simpl.ebsi.timeout` defaults to 90 s. A Tier-2
+  session creation that hits a cold cache would block that long, so pre-warm or sync in production.
+- The SSRF guard checks resolved addresses before the request (DNS rebinding between check and fetch is not
+  closed); the sidecar is a single extra component on the session path.
+- Revocation/status, `accreditedFor` matching, and attribute mapping from EBSI are not touched.
+- The Java service change is not Tier-2-run in Spring: see the line above on what was and was not compiled.
