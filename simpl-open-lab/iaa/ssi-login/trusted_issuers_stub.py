@@ -29,6 +29,15 @@ CREDENTIAL_QUERY = {
 }
 
 
+import os  # noqa: E402
+
+# EBSI_WEBHOOK=http://127.0.0.1:8091/verify adds the EBSI issuer-trust policy (iaa/ebsi-trust) to the query
+# the Keycloak extension forwards to verifier2: signature stays, and the issuer must be EBSI-accredited.
+if os.environ.get("EBSI_WEBHOOK"):
+    CREDENTIAL_QUERY["core_flow"]["policies"] = {"vc_policies": [
+        {"policy": "signature"}, {"policy": "webhook", "url": os.environ["EBSI_WEBHOOK"]}]}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         print(f"[users-roles] GET {self.path}", flush=True)
