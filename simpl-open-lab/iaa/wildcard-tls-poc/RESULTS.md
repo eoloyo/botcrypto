@@ -221,3 +221,12 @@ LET'S ENCRYPT PROBE: ALL CHECKS PASSED
 === EXIT 0
 === DONE
 ```
+
+
+## Whole-agent chart level (`fullchain.sh`, helm only)
+
+```
+components_check.py   52/52   (16 component charts, 17 versions; default identical, wildcard covers every cert-requesting Ingress, control fails)
+bundles_check.py      48/48   (18 umbrella/bundle charts)
+leaves_check.py       26 covered, 60 no Ingress, 1 no TLS block, 0 gaps; CONTROL=1 on the unpatched charts: 26 gaps
+```

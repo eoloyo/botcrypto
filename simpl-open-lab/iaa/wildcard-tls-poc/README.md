@@ -38,6 +38,32 @@ deep and keeps its Governance-Authority-issued identity certificate: it is not c
 
 (Results are those of the last `./run_all.sh`; see `RESULTS.md` for the log excerpt.)
 
+## The whole agent, not just six charts (`fullchain.sh`, no cluster needed)
+
+The first prototype switched six component charts and the IAA bundle. `fullchain.sh` takes it to every umbrella, bundle and component chart that
+can request a certificate (inventory and decisions per chart: `INVENTORY.md`). It needs only `helm` and `python3` (+ pyyaml).
+
+| Script | What it proves | Result |
+|---|---|---|
+| `components_wildcard.py` -> `components-wildcard.patch` | 16 component charts (17 pinned versions) get `existingTlsSecret`; 22 Ingress templates, 36 annotation lines gated | `{charts: 17, templates: 22, annotations_gated: 36, secretnames: 22}` |
+| `components_check.py` | each patched chart renders the **same output as the original by default** (random passwords and the chart's own values hash normalised), and with the value set every cert-requesting Ingress uses the shared Secret with no annotation; the same check on the unpatched chart fails | 52 / 52 (a deliberately broken default is caught: 51 / 52) |
+| `wildcard_all.py` -> `bundles-wildcard.patch` | the switch carried through 16 umbrella/bundle charts: 16 hand-downs, 18+6+5 `existingTlsSecret`, 24 annotation edits, 22 secretNames, 2 `tls: true` charts, 3 inline Ingresses; any `cluster.issuer` use no rule claims fails the run | 0 unclaimed |
+| `bundles_check.py` | all 18 umbrella/bundle charts: default render byte-identical; in wildcard mode every Application source that mentions an issuer is a patched leaf with the Secret set, a bundle that receives `tls.mode: wildcard`, hard-disabled, or a known unused key | 48 / 48 |
+| `leaves_check.py` | **render level**: every leaf chart rendered with the values its bundle really passes: 26 cover all their Ingresses with the shared Secret, 60 have no Ingress, 1 has no TLS block | 0 gaps; the same check on the unpatched charts finds **26 leaves still requesting per-host certificates** (`CONTROL=1`) |
+
+What this found that the six-chart prototype could not have:
+- **Helm map merge.** Four values-only charts (catalogue-ui, sd-ui, superset, gitea) ship `cert-manager.io/cluster-issuer: dev-prod` in their own `values.yaml`.
+  The bundle's `annotations: {}` does not remove it, so the Ingress kept the annotation *and* named the shared Secret: cert-manager would then try to issue into
+  the same Secret as the wildcard `Certificate`. Fix: an explicit `null`, but only where that chart *version* ships the default (a `null` for a key that
+  is not in the defaults renders a literal `key: null`; a first, version-blind attempt showed this on gitea 10.4.1).
+- **monitoring-proxy pods roll once.** The chart hashes `values.yaml` into a pod annotation, so adding the new key changes the hash on the first upgrade. Nothing else changes.
+- **A wildcard cannot cover everything.** The Logstash beats host is two labels deep (`logstash.beats.<ns>...`) and uses a pre-provisioned secret.
+- Charts are not uniform: the same bundle mixes `issuer`, `clusterIssuer`, annotations, `tls: true`; one chart version has no Ingress at all.
+
+Limits of this level: it is `helm template`, not an ArgoCD deployment; values kept in ArgoCD `valueFiles` (the separate values repository) are not visible,
+so a value file that re-adds an issuer annotation would not be caught; six leaves could not be rendered (keycloak 25.2.0 tag not pullable, eck-operator,
+edc, and monitoring-proxy through its bundle needs valueFiles; monitoring-proxy is covered by `components_check.py`); `authority-gaia-x-edc` and `authority-monitoring` are not inventoried.
+
 ## What the tests found along the way
 
 **In the product / operations**
@@ -72,10 +98,10 @@ Every check was also shown to be able to fail (sensitivity runs against unpatche
   What would complete it: a registered domain whose nameservers are reachable from the internet and that cert-manager can update through an API.
   Not this sandbox, which has no inbound reachability. A throwaway domain plus API credentials at any DNS provider (or a free deSEC `dedyn.io`
   subdomain) and Let's Encrypt **staging** would do; it still would not test the OVH solver unless the domain is at OVH.
-- **Level 5: no ArgoCD install of the official charts.** The chain umbrella -> IAA bundle -> component charts is proved by `helm template`
-  on the real charts, not by a deployment. Not done: the other five consumer bundles and the provider umbrella (same edit, not applied);
-  the authority chart's inline Ingress; third-party charts (Keycloak, Gitea, Kibana, the Kafka/other UIs); who consumes
-  `global.ingress.issuer`; the `agent-tls` chart as an ArgoCD Application (the umbrella needs somewhere to host it) and Certificate-before-Ingress
+- **Level 5: no ArgoCD install of the official charts.** The chain umbrella -> bundles -> component charts is proved by `helm template`
+  on the real charts (`fullchain.sh`), not by a deployment. Done since the first version: all consumer and provider bundles, both umbrellas, the
+  inline Ingresses, the third-party charts that have an Ingress; `global.ingress.issuer` is read by nothing. Not done: the authority bundles
+  `authority-gaia-x-edc` / `authority-monitoring`, ArgoCD valueFiles; the `agent-tls` chart as an ArgoCD Application (the umbrella needs somewhere to host it) and Certificate-before-Ingress
   sync-wave ordering.
 - **No login flow through the wildcard.** Hostnames do not change, so CORS and Keycloak redirect settings should not either, but a Keycloak/OIDC login through the wildcard was not run. The browser test loads a placeholder nginx page, not a Simpl UI.
 - **Issuers are a lab CA and Pebble.** Simpl's guide says a private CA is unsupported for the platform; the lab CA is only a test device. The ACME test trusts Pebble's CA as a partial chain.

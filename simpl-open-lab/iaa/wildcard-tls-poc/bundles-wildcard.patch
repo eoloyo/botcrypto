@@ -1,0 +1,1350 @@
+diff -ruN charts/authority-iaa-chart/charts/templates/application.yaml patched/authority-iaa-chart/charts/templates/application.yaml
+--- charts/authority-iaa-chart/charts/templates/application.yaml	2026-11-06 20:07:52.591386392 +0000
++++ patched/authority-iaa-chart/charts/templates/application.yaml	2026-11-06 20:30:38.532206637 +0000
+@@ -263,6 +263,9 @@
+           allowOrigin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://schema-manager-fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:3000
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         usersRolesUrl: http://users-roles-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+         securityAttributesProviderUrl: http://security-attributes-provider-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+         keycloakUrl: http://keycloak.{{ .Values.cluster.namespace }}.svc.cluster.local
+@@ -463,6 +466,9 @@
+         hostFe: authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         cors:
+           allowOrigin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+         env:
+@@ -493,6 +499,9 @@
+         hostFe: authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         cors:
+           allowOrigin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+         env:
+@@ -525,6 +534,9 @@
+         hostFe: authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         cors:
+           allowOrigin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+         env:
+@@ -559,6 +571,9 @@
+         hostFe: authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         cors:
+           allowOrigin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+         env:
+@@ -589,6 +604,9 @@
+         hostFe: authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         cors:
+           allowOrigin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000       
+         env:
+@@ -689,6 +707,9 @@
+         global:
+           ingress:
+             issuer: {{ .Values.cluster.issuer }}
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++            {{- end }}
+         keycloak:
+           master:
+             password: vault:{{ .Values.secrets.secretEngine }}/data/{{ .Values.cluster.namespace }}-keycloak#admin
+diff -ruN charts/authority-iaa-chart/charts/templates/frontend/root/ingress.yaml patched/authority-iaa-chart/charts/templates/frontend/root/ingress.yaml
+--- charts/authority-iaa-chart/charts/templates/frontend/root/ingress.yaml	2026-11-06 20:07:53.943386472 +0000
++++ patched/authority-iaa-chart/charts/templates/frontend/root/ingress.yaml	2026-11-06 20:30:38.532855150 +0000
+@@ -2,8 +2,10 @@
+ kind: Ingress
+ metadata:
+   annotations:
++    {{- if not (eq ((.Values.tls | default dict).mode | default "perHost") "wildcard") }}
+     cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
+     cert-manager.io/renew-before: 720h
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: https://authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+@@ -28,4 +30,4 @@
+   tls:
+     - hosts:
+         - authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+-      secretName: authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}-cert
++      secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}authority.fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}-cert{{ end }}
+diff -ruN charts/authority-iaa-chart/charts/values.yaml patched/authority-iaa-chart/charts/values.yaml
+--- charts/authority-iaa-chart/charts/values.yaml	2026-11-06 20:08:00.355386854 +0000
++++ patched/authority-iaa-chart/charts/values.yaml	2026-11-06 20:30:38.534565617 +0000
+@@ -298,3 +298,8 @@
+   enabled: false
+ oid4vp:
+   enabled: false
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/common-components-chart/charts/templates/application-openbao.yaml patched/common-components-chart/charts/templates/application-openbao.yaml
+--- charts/common-components-chart/charts/templates/application-openbao.yaml	2026-11-06 20:09:06.467390784 +0000
++++ patched/common-components-chart/charts/templates/application-openbao.yaml	2026-11-06 20:30:38.568448044 +0000
+@@ -47,12 +47,16 @@
+             replicas: {{ .Values.openbao.replicas }}
+             {{- end }}
+           ingress:
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            annotations: {}
++            {{- else }}
+             annotations:
+               cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+             hosts:
+               - host: secrets.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
+             tls:
+-              - secretName: openbao-{{ .Values.namespaceTag }}-tls
++              - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}openbao-{{ .Values.namespaceTag }}-tls{{ end }}
+                 hosts:
+                   - secrets.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
+         {{- if .Values.openbao.resources }}
+diff -ruN charts/common-components-chart/charts/templates/application.yaml patched/common-components-chart/charts/templates/application.yaml
+--- charts/common-components-chart/charts/templates/application.yaml	2026-11-06 20:09:07.395390839 +0000
++++ patched/common-components-chart/charts/templates/application.yaml	2026-11-06 20:30:38.568029390 +0000
+@@ -163,6 +163,9 @@
+       values: |
+         agentType: common
+         clusterIssuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+         clusterIssuer_internal: {{ .Values.cluster.internalIssuer }}
+         domainSuffix: {{ .Values.domainSuffix }}
+         namespaceTag: {{ .Values.namespaceTag }}
+@@ -315,11 +318,13 @@
+                 - path: /
+                   pathType: Prefix
+           tls:
+-            - secretName: redpanda-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}redpanda-tls{{ end }}
+               hosts:
+                 - redpanda.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
+           annotations:
++            {{- if not (eq ((.Values.tls | default dict).mode | default "perHost") "wildcard") }}
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+             vault.security.banzaicloud.io/vault-addr: https://secrets.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
+             vault.security.banzaicloud.io/vault-role: {{ .Values.secrets.role }}
+         extraVolumes:
+@@ -424,11 +429,15 @@
+                       port:
+                         number: 80
+           tls:
+-            - secretName: pgadmin-tls-{{ .Values.cluster.namespace }}
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}pgadmin-tls-{{ .Values.cluster.namespace }}{{ end }}
+               hosts:
+                 - pgadmin.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+         {{- if eq .Values.resourcePreset "low" }}
+         resources:
+           requests:
+@@ -455,11 +464,23 @@
+         fullnameOverride: {{ .Values.mailpit.nameOverride }}-{{ .Values.cluster.namespace }}
+         ingress:
+           enabled: true
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hostname: mailpit.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
+           ingressClassName: nginx
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          tls: false
++          extraTls:
++            - hosts:
++                - mailpit.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}
++              secretName: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- else }}
+           tls: true
++          {{- end }}
+   {{- end }}
+   {{- if .Values.infrastructure_consumption_monitoring_service.enabled }}
+   - repoURL: "https://code.europa.eu/api/v4/projects/{{ .Values.infrastructure_consumption_monitoring_service.projectID }}/packages/helm/stable"
+diff -ruN charts/common-components-chart/charts/values.yaml patched/common-components-chart/charts/values.yaml
+--- charts/common-components-chart/charts/values.yaml	2026-11-06 20:09:07.803390863 +0000
++++ patched/common-components-chart/charts/values.yaml	2026-11-06 20:30:38.568635008 +0000
+@@ -250,4 +250,9 @@
+       memory: "700Mi"
+       cpu: "300m"
+   valueFiles:
+-    - values.yaml
+\ No newline at end of file
++    - values.yaml
++
++# Optional shared (wildcard) certificate for the common namespace; perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""   # e.g. <namespaceTag.common>-wildcard-tls
+diff -ruN charts/consumer-agent-chart/charts/templates/application.yaml patched/consumer-agent-chart/charts/templates/application.yaml
+--- charts/consumer-agent-chart/charts/templates/application.yaml	2026-11-06 20:07:39.219385597 +0000
++++ patched/consumer-agent-chart/charts/templates/application.yaml	2026-11-06 20:30:38.528869391 +0000
+@@ -39,6 +39,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -70,6 +75,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -101,6 +111,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -131,6 +146,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -161,6 +181,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -191,6 +216,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+diff -ruN charts/consumer-agent-chart/charts/values.yaml patched/consumer-agent-chart/charts/values.yaml
+--- charts/consumer-agent-chart/charts/values.yaml	2026-11-06 20:07:39.643385622 +0000
++++ patched/consumer-agent-chart/charts/values.yaml	2026-11-06 20:30:38.528992594 +0000
+@@ -64,3 +64,9 @@
+   targetRevision: 1.0.1
+   chart_name: consumer-monitoring
+   valuesBranch: v1.0.1
++
++# Optional shared (wildcard) certificate: perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcard:
++    secretName: ""   # default: <namespaceTag>-wildcard-tls
+diff -ruN charts/consumer-contract-billing/charts/templates/application.yaml patched/consumer-contract-billing/charts/templates/application.yaml
+--- charts/consumer-contract-billing/charts/templates/application.yaml	2026-11-06 20:08:24.923388314 +0000
++++ patched/consumer-contract-billing/charts/templates/application.yaml	2026-11-06 20:30:38.554593683 +0000
+@@ -59,8 +59,12 @@
+             catalogTokenUrl: "https://participant.be.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}/auth/realms/participant/protocol/openid-connect/token"
+         ingress:
+           enabled: {{ .Values.contract.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.contract.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -68,7 +72,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.contract.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.contract.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.contract.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}             
+         {{- if eq .Values.resourcePreset "low" }}
+@@ -189,8 +193,12 @@
+               secretConfigPath: "{{ .Values.secrets.secretEngine }}/{{ .Values.cluster.namespace }}-wallet-service"
+         ingress:
+           enabled: {{ .Values.walletService.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.walletService.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -198,7 +206,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.walletService.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.walletService.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.walletService.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+@@ -237,8 +245,12 @@
+             contractUiBackend: "https://{{ .Values.contractuibackend.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}"
+         ingress:
+           enabled: {{ .Values.contractuibackend.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.contractuibackend.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -246,7 +258,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.contractuibackend.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.contractuibackend.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.contractuibackend.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+diff -ruN charts/consumer-contract-billing/charts/values.yaml patched/consumer-contract-billing/charts/values.yaml
+--- charts/consumer-contract-billing/charts/values.yaml	2026-11-06 20:08:25.347388339 +0000
++++ patched/consumer-contract-billing/charts/values.yaml	2026-11-06 20:30:38.554685097 +0000
+@@ -76,4 +76,9 @@
+   chart_name: simpl-contract-ui-backend
+   nameOverride: simpl-contract-ui-backend
+   ingress:
+-    enabled: false
+\ No newline at end of file
++    enabled: false
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/consumer-data1/charts/templates/application.yaml patched/consumer-data1/charts/templates/application.yaml
+--- charts/consumer-data1/charts/templates/application.yaml	2026-11-06 20:08:22.331388160 +0000
++++ patched/consumer-data1/charts/templates/application.yaml	2026-11-06 20:30:38.553339875 +0000
+@@ -67,6 +67,9 @@
+       values: |
+         ingress:
+           clusterIssuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         domain: {{ .Values.namespaceTag.consumer }}.{{ .Values.domainSuffix }}
+         cluster:
+           namespace: {{ .Values.cluster.namespace }}
+@@ -118,6 +121,9 @@
+       values: |
+         ingress:
+           clusterIssuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         domain: {{ .Values.namespaceTag.consumer }}.{{ .Values.domainSuffix }}
+         cluster:
+           namespace: {{ .Values.cluster.namespace }}
+diff -ruN charts/consumer-data1/charts/values.yaml patched/consumer-data1/charts/values.yaml
+--- charts/consumer-data1/charts/values.yaml	2026-11-06 20:08:22.747388185 +0000
++++ patched/consumer-data1/charts/values.yaml	2026-11-06 20:30:38.553424117 +0000
+@@ -100,3 +100,8 @@
+       memory: "500Mi"
+   valueFiles:
+     - values.yaml
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/consumer-gaia-x-edc/charts/templates/application.yaml patched/consumer-gaia-x-edc/charts/templates/application.yaml
+--- charts/consumer-gaia-x-edc/charts/templates/application.yaml	2026-11-06 20:08:19.827388011 +0000
++++ patched/consumer-gaia-x-edc/charts/templates/application.yaml	2026-11-06 20:30:38.552696971 +0000
+@@ -41,11 +41,16 @@
+               - path: /
+                 pathType: ImplementationSpecific
+           tls:
+-            - secretName: catalogue-ui-tld-secret
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}catalogue-ui-tld-secret{{ end }}
+               hosts:
+                 - catalogue-ui.{{ .Values.namespaceTag.consumer }}.{{ .Values.domainSuffix }}
+           annotations:
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            cert-manager.io/cluster-issuer: null
++            acme.cert-manager.io/http01-edit-in-place: null
++            {{- else }}
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+         {{- if eq .Values.resourcePreset "low" }}
+         resources:
+           requests:
+diff -ruN charts/consumer-gaia-x-edc/charts/values.yaml patched/consumer-gaia-x-edc/charts/values.yaml
+--- charts/consumer-gaia-x-edc/charts/values.yaml	2026-11-06 20:08:20.255388037 +0000
++++ patched/consumer-gaia-x-edc/charts/values.yaml	2026-11-06 20:30:38.552803803 +0000
+@@ -58,4 +58,9 @@
+       cpu: "500m"
+       memory: "500Mi" 
+   valueFiles:
+-    - values.yaml
+\ No newline at end of file
++    - values.yaml
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml patched/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml
+--- charts/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml	2026-11-06 20:08:07.971387306 +0000
++++ patched/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml	2026-11-06 20:30:38.536927901 +0000
+@@ -11,6 +11,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN charts/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml patched/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml
+--- charts/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml	2026-11-06 20:08:08.811387356 +0000
++++ patched/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml	2026-11-06 20:30:38.536293862 +0000
+@@ -11,6 +11,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN charts/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml patched/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml
+--- charts/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml	2026-11-06 20:08:10.063387431 +0000
++++ patched/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml	2026-11-06 20:30:38.536681684 +0000
+@@ -22,6 +22,9 @@
+         {{- end }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       keycloakUrl: http://keycloak.{{ .Values.cluster.namespace }}.svc.cluster.local
+       usersRolesUrl: http://users-roles-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+       authenticationProviderUrl: http://authentication-provider-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+diff -ruN charts/consumer-iaa/charts/templates/applications/_users_roles-application.yaml patched/consumer-iaa/charts/templates/applications/_users_roles-application.yaml
+--- charts/consumer-iaa/charts/templates/applications/_users_roles-application.yaml	2026-11-06 20:08:11.347387507 +0000
++++ patched/consumer-iaa/charts/templates/applications/_users_roles-application.yaml	2026-11-06 20:30:38.537931924 +0000
+@@ -22,6 +22,9 @@
+       global:
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+       keycloak:
+         master:
+           password: vault:{{ .Values.secrets.secretEngine }}/data/{{ .Values.cluster.namespace }}-keycloak#admin
+diff -ruN charts/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml patched/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml
+--- charts/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml	2026-11-06 20:08:11.759387532 +0000
++++ patched/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml	2026-11-06 20:30:38.537439786 +0000
+@@ -12,6 +12,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN charts/consumer-iaa/charts/templates/frontend/root/ingress.yaml patched/consumer-iaa/charts/templates/frontend/root/ingress.yaml
+--- charts/consumer-iaa/charts/templates/frontend/root/ingress.yaml	2026-11-06 20:08:13.147387614 +0000
++++ patched/consumer-iaa/charts/templates/frontend/root/ingress.yaml	2026-11-06 20:30:38.535248433 +0000
+@@ -2,8 +2,10 @@
+ kind: Ingress
+ metadata:
+   annotations:
++    {{- if not (eq ((.Values.tls | default dict).mode | default "perHost") "wildcard") }}
+     cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
+     cert-manager.io/renew-before: 720h
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://consumer.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+@@ -28,4 +30,4 @@
+   tls:
+     - hosts:
+         - participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+-      secretName: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}-cert
++      secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}-cert{{ end }}
+diff -ruN charts/consumer-iaa/charts/values.yaml patched/consumer-iaa/charts/values.yaml
+--- charts/consumer-iaa/charts/values.yaml	2026-11-06 20:08:17.739387887 +0000
++++ patched/consumer-iaa/charts/values.yaml	2026-11-06 20:30:38.538128970 +0000
+@@ -214,3 +214,8 @@
+   enabled: false
+ oid4vp:
+   enabled: false
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/consumer-infrastructure/charts/values.yaml patched/consumer-infrastructure/charts/values.yaml
+--- charts/consumer-infrastructure/charts/values.yaml	2026-11-06 20:08:27.959388494 +0000
++++ patched/consumer-infrastructure/charts/values.yaml	2026-11-06 20:30:38.555016031 +0000
+@@ -63,3 +63,8 @@
+       memory: "1Gi"
+   valueFiles:
+     - values.yaml
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/consumer-monitoring/charts/templates/application.yaml patched/consumer-monitoring/charts/templates/application.yaml
+--- charts/consumer-monitoring/charts/templates/application.yaml	2026-11-06 20:08:30.063388620 +0000
++++ patched/consumer-monitoring/charts/templates/application.yaml	2026-11-06 20:30:38.555846401 +0000
+@@ -31,6 +31,9 @@
+         {{- end }}
+       values: |
+         clusterIssuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+         domainSuffix: {{ .Values.domainSuffix }}
+         namespaceTag: {{ .Values.namespaceTag.consumer }}
+         mainNamespace: {{ .Values.cluster.commonToolsNamespace }}
+@@ -56,8 +59,12 @@
+       values: |
+         ingress:
+           enabled: {{ .Values.landingPage.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: simpl.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -65,7 +72,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.landingPage.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.landingPage.nameOverride }}-tls{{ end }}
+               hosts:
+                 - simpl.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+@@ -105,6 +112,9 @@
+       values: |
+         domainSuffix: {{ .Values.domainSuffix }}
+         clusterIssuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+         gateway:
+           serviceName: {{ .Values.monitoringProxy.gateway.serviceName }}
+           port: {{ .Values.monitoringProxy.gateway.port }}
+@@ -194,15 +204,19 @@
+           enabled: {{ .Values.monitoringReportingFe.ingress.enabled }}
+         {{- if .Values.monitoringReportingFe.ingress.enabled }}
+           className: {{ .Values.monitoringReportingFe.ingress.className }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.monitoringReportingFe.ingress.hostPrefix }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+                 - path: /
+                   pathType: Prefix
+           tls:
+-            - secretName: {{ .Values.monitoringReportingFe.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.monitoringReportingFe.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.monitoringReportingFe.ingress.hostPrefix }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- end }}
+diff -ruN charts/consumer-monitoring/charts/values.yaml patched/consumer-monitoring/charts/values.yaml
+--- charts/consumer-monitoring/charts/values.yaml	2026-11-06 20:08:30.479388644 +0000
++++ patched/consumer-monitoring/charts/values.yaml	2026-11-06 20:30:38.555965452 +0000
+@@ -119,4 +119,9 @@
+     hostPrefix: reporting
+   resources:
+     requests: {cpu: 300m, memory: 512Mi, ephemeral-storage: 2Gi}
+-    limits: {cpu: 500m, memory: 512Mi, ephemeral-storage: 2Gi}
+\ No newline at end of file
++    limits: {cpu: 500m, memory: 512Mi, ephemeral-storage: 2Gi}
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/data-provider-agent-chart/charts/templates/application.yaml patched/data-provider-agent-chart/charts/templates/application.yaml
+--- charts/data-provider-agent-chart/charts/templates/application.yaml	2026-11-06 20:07:42.071385767 +0000
++++ patched/data-provider-agent-chart/charts/templates/application.yaml	2026-11-06 20:30:38.529222895 +0000
+@@ -41,6 +41,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -72,6 +77,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -103,6 +113,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -133,6 +148,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -163,6 +183,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -200,6 +225,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -230,6 +260,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.dataprovider) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+diff -ruN charts/data-provider-agent-chart/charts/values.yaml patched/data-provider-agent-chart/charts/values.yaml
+--- charts/data-provider-agent-chart/charts/values.yaml	2026-11-06 20:07:42.547385795 +0000
++++ patched/data-provider-agent-chart/charts/values.yaml	2026-11-06 20:30:38.529301357 +0000
+@@ -77,3 +77,9 @@
+   targetRevision: 0.5.8
+   chart_name: provider-orchestration-platform
+   valuesBranch: v0.5.8
++
++# Optional shared (wildcard) certificate: perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcard:
++    secretName: ""   # default: <namespaceTag>-wildcard-tls
+diff -ruN charts/dataprovider-contract-billing/charts/templates/application.yaml patched/dataprovider-contract-billing/charts/templates/application.yaml
+--- charts/dataprovider-contract-billing/charts/templates/application.yaml	2026-11-06 20:08:55.931390157 +0000
++++ patched/dataprovider-contract-billing/charts/templates/application.yaml	2026-11-06 20:30:38.561947623 +0000
+@@ -59,8 +59,12 @@
+             catalogTokenUrl: "https://participant.be.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}/auth/realms/participant/protocol/openid-connect/token"
+         ingress:
+           enabled: {{ .Values.contract.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.contract.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -68,7 +72,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.contract.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.contract.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.contract.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+@@ -189,8 +193,12 @@
+               secretConfigPath: "{{ .Values.secrets.secretEngine }}/{{ .Values.cluster.namespace }}-wallet-service"
+         ingress:
+           enabled: {{ .Values.walletService.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.walletService.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -198,7 +206,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.walletService.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.walletService.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.walletService.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+@@ -237,8 +245,12 @@
+             contractUiBackend: "https://{{ .Values.contractuibackend.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}"
+         ingress:
+           enabled: {{ .Values.contractuibackend.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.contractuibackend.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -246,7 +258,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.contractuibackend.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.contractuibackend.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.contractuibackend.nameOverride }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+diff -ruN charts/dataprovider-contract-billing/charts/values.yaml patched/dataprovider-contract-billing/charts/values.yaml
+--- charts/dataprovider-contract-billing/charts/values.yaml	2026-11-06 20:08:56.355390182 +0000
++++ patched/dataprovider-contract-billing/charts/values.yaml	2026-11-06 20:30:38.562022562 +0000
+@@ -76,4 +76,9 @@
+   chart_name: simpl-contract-ui-backend
+   nameOverride: simpl-contract-ui-backend
+   ingress:
+-    enabled: false
+\ No newline at end of file
++    enabled: false
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/dataprovider-data1/charts/templates/application.yaml patched/dataprovider-data1/charts/templates/application.yaml
+--- charts/dataprovider-data1/charts/templates/application.yaml	2026-11-06 20:08:53.347390004 +0000
++++ patched/dataprovider-data1/charts/templates/application.yaml	2026-11-06 20:30:38.561060912 +0000
+@@ -34,6 +34,9 @@
+       values: |
+         ingress:
+           clusterIssuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         domain: {{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+         cluster:
+           namespace: {{ .Values.cluster.namespace }}
+@@ -75,6 +78,9 @@
+         ingress:
+           hostname: files.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+           clusterIssuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         {{- if eq .Values.resourcePreset "low" }}
+         resources:
+           requests:
+@@ -103,6 +109,9 @@
+       values: |
+         ingress:
+           clusterIssuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         domain: {{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+         cluster:
+           namespace: {{ .Values.cluster.namespace }}
+@@ -160,6 +169,9 @@
+       values: |
+         ingress:
+           clusterIssuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         domain: {{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+         catalogueAdapter:
+           tier2Gateway:
+diff -ruN charts/dataprovider-data1/charts/values.yaml patched/dataprovider-data1/charts/values.yaml
+--- charts/dataprovider-data1/charts/values.yaml	2026-11-06 20:08:53.771390029 +0000
++++ patched/dataprovider-data1/charts/values.yaml	2026-11-06 20:30:38.561139694 +0000
+@@ -123,3 +123,8 @@
+       memory: "500Mi" 
+   valueFiles:
+     - values.yaml
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/dataprovider-gaia-x-edc/charts/templates/application.yaml patched/dataprovider-gaia-x-edc/charts/templates/application.yaml
+--- charts/dataprovider-gaia-x-edc/charts/templates/application.yaml	2026-11-06 20:08:50.663389844 +0000
++++ patched/dataprovider-gaia-x-edc/charts/templates/application.yaml	2026-11-06 20:30:38.560379784 +0000
+@@ -65,11 +65,16 @@
+               - path: /
+                 pathType: ImplementationSpecific
+           tls:
+-            - secretName: catalogue-ui-tld-secret
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}catalogue-ui-tld-secret{{ end }}
+               hosts:
+                 - catalogue-ui.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+           annotations:
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            cert-manager.io/cluster-issuer: null
++            acme.cert-manager.io/http01-edit-in-place: null
++            {{- else }}
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+         {{- if eq .Values.resourcePreset "low" }}
+         resources:
+           requests:
+@@ -146,11 +151,16 @@
+               - path: /
+                 pathType: ImplementationSpecific
+           tls:
+-            - secretName: sd-ui-tld-secret
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}sd-ui-tld-secret{{ end }}
+               hosts:
+                 - sd-ui.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+           annotations:
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            cert-manager.io/cluster-issuer: null
++            acme.cert-manager.io/http01-edit-in-place: null
++            {{- else }}
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+         env:
+           PUBLIC_AUTH_KEYCLOAK_SERVER_URL: "https://participant.be.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}"
+           PUBLIC_CREATION_WIZARD_API_URL: "https://participant.be.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}/sdtooling-api"
+diff -ruN charts/dataprovider-gaia-x-edc/charts/values.yaml patched/dataprovider-gaia-x-edc/charts/values.yaml
+--- charts/dataprovider-gaia-x-edc/charts/values.yaml	2026-11-06 20:08:51.111389871 +0000
++++ patched/dataprovider-gaia-x-edc/charts/values.yaml	2026-11-06 20:30:38.560471914 +0000
+@@ -90,3 +90,8 @@
+       memory: "500Mi"
+   valueFiles:
+     - values.yaml
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/dataprovider-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml patched/dataprovider-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml
+--- charts/dataprovider-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml	2026-11-06 20:08:38.379389114 +0000
++++ patched/dataprovider-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml	2026-11-06 20:30:38.558388667 +0000
+@@ -11,6 +11,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN charts/dataprovider-iaa/charts/templates/applications/_consent_management_fe-application.yaml patched/dataprovider-iaa/charts/templates/applications/_consent_management_fe-application.yaml
+--- charts/dataprovider-iaa/charts/templates/applications/_consent_management_fe-application.yaml	2026-11-06 20:08:39.267389167 +0000
++++ patched/dataprovider-iaa/charts/templates/applications/_consent_management_fe-application.yaml	2026-11-06 20:30:38.557700545 +0000
+@@ -11,6 +11,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN charts/dataprovider-iaa/charts/templates/applications/_tier1_gateway-application.yaml patched/dataprovider-iaa/charts/templates/applications/_tier1_gateway-application.yaml
+--- charts/dataprovider-iaa/charts/templates/applications/_tier1_gateway-application.yaml	2026-11-06 20:08:40.495389240 +0000
++++ patched/dataprovider-iaa/charts/templates/applications/_tier1_gateway-application.yaml	2026-11-06 20:30:38.558140273 +0000
+@@ -22,6 +22,9 @@
+         {{- end }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       keycloakUrl: http://keycloak.{{ .Values.cluster.namespace }}.svc.cluster.local
+       usersRolesUrl: http://users-roles-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+       authenticationProviderUrl: http://authentication-provider-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+diff -ruN charts/dataprovider-iaa/charts/templates/applications/_users_roles-application.yaml patched/dataprovider-iaa/charts/templates/applications/_users_roles-application.yaml
+--- charts/dataprovider-iaa/charts/templates/applications/_users_roles-application.yaml	2026-11-06 20:08:41.747389314 +0000
++++ patched/dataprovider-iaa/charts/templates/applications/_users_roles-application.yaml	2026-11-06 20:30:38.559441681 +0000
+@@ -22,6 +22,9 @@
+       global:
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+       keycloak:
+         master:
+           password: vault:{{ .Values.secrets.secretEngine }}/data/{{ .Values.cluster.namespace }}-keycloak#admin
+diff -ruN charts/dataprovider-iaa/charts/templates/applications/_users_roles_fe-application.yaml patched/dataprovider-iaa/charts/templates/applications/_users_roles_fe-application.yaml
+--- charts/dataprovider-iaa/charts/templates/applications/_users_roles_fe-application.yaml	2026-11-06 20:08:42.171389339 +0000
++++ patched/dataprovider-iaa/charts/templates/applications/_users_roles_fe-application.yaml	2026-11-06 20:30:38.558992367 +0000
+@@ -12,6 +12,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN charts/dataprovider-iaa/charts/templates/frontend/root/ingress.yaml patched/dataprovider-iaa/charts/templates/frontend/root/ingress.yaml
+--- charts/dataprovider-iaa/charts/templates/frontend/root/ingress.yaml	2026-11-06 20:08:43.535389420 +0000
++++ patched/dataprovider-iaa/charts/templates/frontend/root/ingress.yaml	2026-11-06 20:30:38.556614218 +0000
+@@ -2,8 +2,10 @@
+ kind: Ingress
+ metadata:
+   annotations:
++    {{- if not (eq ((.Values.tls | default dict).mode | default "perHost") "wildcard") }}
+     cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
+     cert-manager.io/renew-before: 720h
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://consumer.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+@@ -28,4 +30,4 @@
+   tls:
+     - hosts:
+         - participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+-      secretName: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}-cert
++      secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}-cert{{ end }}
+diff -ruN charts/dataprovider-iaa/charts/values.yaml patched/dataprovider-iaa/charts/values.yaml
+--- charts/dataprovider-iaa/charts/values.yaml	2026-11-06 20:08:48.559389719 +0000
++++ patched/dataprovider-iaa/charts/values.yaml	2026-11-06 20:30:38.559631466 +0000
+@@ -214,3 +214,8 @@
+   enabled: false
+ oid4vp:
+   enabled: false
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/dataprovider-infrastructure/charts/templates/application.yaml patched/dataprovider-infrastructure/charts/templates/application.yaml
+--- charts/dataprovider-infrastructure/charts/templates/application.yaml	2026-11-06 20:08:58.491390309 +0000
++++ patched/dataprovider-infrastructure/charts/templates/application.yaml	2026-11-06 20:30:38.562818802 +0000
+@@ -80,11 +80,15 @@
+                 - path: /
+                   pathType: ImplementationSpecific
+             tls:
+-              - secretName: {{ .Values.infrastructure_be.fullnameOverride }}-tld-secret
++              - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.infrastructure_be.fullnameOverride }}-tld-secret{{ end }}
+                 hosts:
+                   - {{ .Values.infrastructure_be.fullnameOverride }}.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            annotations: {}
++            {{- else }}
+             annotations:
+               cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+           {{- if eq .Values.resourcePreset "low" }}
+           resources:
+             requests:
+@@ -121,9 +125,13 @@
+               - path: /
+                 pathType: ImplementationSpecific
+           tls:
+-            - secretName: {{ .Values.infrastructure_fe.fullnameOverride }}-tld-secret
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.infrastructure_fe.fullnameOverride }}-tld-secret{{ end }}
+               hosts:
+                 - {{ .Values.infrastructure_fe.fullnameOverride }}.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+   {{- end }}
+\ No newline at end of file
+diff -ruN charts/dataprovider-infrastructure/charts/templates/dependencies.yaml patched/dataprovider-infrastructure/charts/templates/dependencies.yaml
+--- charts/dataprovider-infrastructure/charts/templates/dependencies.yaml	2026-11-06 20:08:58.899390334 +0000
++++ patched/dataprovider-infrastructure/charts/templates/dependencies.yaml	2026-11-06 20:30:38.563984902 +0000
+@@ -56,8 +56,12 @@
+       values: |
+         ingress:
+           enabled: true
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           className: nginx
+           hosts:
+             - host: gitea.crossplane.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+@@ -65,7 +69,7 @@
+               - path: /
+                 pathType: ImplementationSpecific
+           tls:
+-            - secretName: gitea-crossplane-tld-secret
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}gitea-crossplane-tld-secret{{ end }}
+               hosts:
+                 - gitea.crossplane.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+         {{- if .Values.gitea.resources  }}
+@@ -86,9 +90,21 @@
+         server:
+           ingress:
+             enabled: true
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            annotations: {}
++            {{- else }}
+             annotations:
+               cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            tls: false
++            extraTls:
++              - hosts:
++                  - argoui.crossplane.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
++                secretName: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++            {{- else }}
+             tls: true
++            {{- end }}
+             ingressClassName: nginx
+             pathType: ImplementationSpecific
+           {{- if eq .Values.resourcePreset "low" }}
+@@ -162,8 +178,12 @@
+         server:
+           ingress:
+             enabled: true
++            {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++            annotations: {}
++            {{- else }}
+             annotations:
+               cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- end }}
+             ingressClassName: nginx
+             hosts:
+               - argoworkflows.crossplane.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+@@ -171,7 +191,7 @@
+               - /
+             pathType: ImplementationSpecific
+             tls:
+-              - secretName: argowf-crossplane-tld-secret
++              - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}argowf-crossplane-tld-secret{{ end }}
+                 hosts:
+                   - argoworkflows.crossplane.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+           {{- if eq .Values.resourcePreset "low" }}
+diff -ruN charts/dataprovider-infrastructure/charts/values.yaml patched/dataprovider-infrastructure/charts/values.yaml
+--- charts/dataprovider-infrastructure/charts/values.yaml	2026-11-06 20:08:59.311390358 +0000
++++ patched/dataprovider-infrastructure/charts/values.yaml	2026-11-06 20:30:38.564076734 +0000
+@@ -222,4 +222,9 @@
+   targetRevision: 0.18.1
+   chart_name: external-secrets
+   nameOverride: external-secrets
+-  
+\ No newline at end of file
++  
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/dataprovider-monitoring/charts/templates/application.yaml patched/dataprovider-monitoring/charts/templates/application.yaml
+--- charts/dataprovider-monitoring/charts/templates/application.yaml	2026-11-06 20:09:01.387390482 +0000
++++ patched/dataprovider-monitoring/charts/templates/application.yaml	2026-11-06 20:30:38.564716545 +0000
+@@ -31,6 +31,9 @@
+         {{- end }}
+       values: |
+         clusterIssuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+         domainSuffix: {{ .Values.domainSuffix }}
+         namespaceTag: {{ .Values.namespaceTag.dataprovider }}
+         mainNamespace: {{ .Values.cluster.commonToolsNamespace }}
+@@ -56,8 +59,12 @@
+       values: |
+         ingress:
+           enabled: {{ .Values.landingPage.ingress.enabled }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: simpl.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+@@ -65,7 +72,7 @@
+                   pathtype: ImplementationSpecific
+                   port: 8080
+           tls:
+-            - secretName: {{ .Values.landingPage.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.landingPage.nameOverride }}-tls{{ end }}
+               hosts:
+                 - simpl.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- if eq .Values.resourcePreset "low" }}
+@@ -105,6 +112,9 @@
+       values: |
+         domainSuffix: {{ .Values.domainSuffix }}
+         clusterIssuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++        {{- end }}
+         gateway:
+           serviceName: {{ .Values.monitoringProxy.gateway.serviceName }}
+           port: {{ .Values.monitoringProxy.gateway.port }}
+@@ -194,15 +204,19 @@
+           enabled: {{ .Values.monitoringReportingFe.ingress.enabled }}
+         {{- if .Values.monitoringReportingFe.ingress.enabled }}
+           className: {{ .Values.monitoringReportingFe.ingress.className }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          annotations: {}
++          {{- else }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++          {{- end }}
+           hosts:
+             - host: {{ .Values.monitoringReportingFe.ingress.hostPrefix }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+               paths:
+                 - path: /
+                   pathType: Prefix
+           tls:
+-            - secretName: {{ .Values.monitoringReportingFe.nameOverride }}-tls
++            - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}{{ .Values.monitoringReportingFe.nameOverride }}-tls{{ end }}
+               hosts:
+                 - {{ .Values.monitoringReportingFe.ingress.hostPrefix }}.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         {{- end }}
+diff -ruN charts/dataprovider-monitoring/charts/values.yaml patched/dataprovider-monitoring/charts/values.yaml
+--- charts/dataprovider-monitoring/charts/values.yaml	2026-11-06 20:09:01.799390506 +0000
++++ patched/dataprovider-monitoring/charts/values.yaml	2026-11-06 20:30:38.564800380 +0000
+@@ -119,4 +119,9 @@
+     hostPrefix: reporting
+   resources:
+     requests: {cpu: 300m, memory: 512Mi, ephemeral-storage: 2Gi}
+-    limits: {cpu: 500m, memory: 512Mi, ephemeral-storage: 2Gi}
+\ No newline at end of file
++    limits: {cpu: 500m, memory: 512Mi, ephemeral-storage: 2Gi}
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/dataprovider-orchestration-platform/charts/templates/application.yaml patched/dataprovider-orchestration-platform/charts/templates/application.yaml
+--- charts/dataprovider-orchestration-platform/charts/templates/application.yaml	2026-11-06 20:09:03.983390636 +0000
++++ patched/dataprovider-orchestration-platform/charts/templates/application.yaml	2026-11-06 20:30:38.566273122 +0000
+@@ -344,7 +344,11 @@
+               tag: "7.0.10-debian-11-r4"
+           ingress:
+             annotations:
++              {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++              cert-manager.io/cluster-issuer: null
++              {{- else }}
+               cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++              {{- end }}
+               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+               nginx.ingress.kubernetes.io/proxy-body-size: 50m
+               nginx.ingress.kubernetes.io/proxy-pass-headers: Host
+@@ -354,7 +358,7 @@
+             hosts:
+               - superset.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+             tls:
+-              - secretName: "superset-tls"
++              - secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}"superset-tls"{{ end }}
+                 hosts:
+                 - superset.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+           supersetNode:
+@@ -422,7 +426,11 @@
+                 SSL_MODE: require
+           ingress:
+             annotations:
++              {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++              cert-manager.io/cluster-issuer: null
++              {{- else }}
+               cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++              {{- end }}
+               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+               nginx.ingress.kubernetes.io/proxy-pass-headers: Host
+             hosts:
+@@ -433,7 +441,7 @@
+             tls:
+               - hosts:
+                   - gitea.{{ .Values.namespaceTag.dataprovider }}.{{ .Values.domainSuffix }}
+-                secretName: gitea-tls
++                secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}{{ else }}gitea-tls{{ end }}
+         actions:
+           fullnameOverride: {{ .Values.gitea.nameOverride }}
+           giteaRootURL: "http://{{ .Values.gitea.nameOverride }}-http.{{ .Values.cluster.namespace }}.svc.cluster.local:3000"
+@@ -526,6 +534,9 @@
+         hostGateway: participant-oauth-client.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ required "tls.wildcardSecretName is required when tls.mode=wildcard" .Values.tls.wildcardSecretName }}
++          {{- end }}
+         keycloakIssuerUri: https://participant.be.{{ .Values.cluster.namespace }}.{{ .Values.domainSuffix }}/auth/realms/participant
+         tier1Url: http://tier1-gateway.{{ .Values.cluster.namespace }}.svc.cluster.local:9000
+         appConfig:
+diff -ruN charts/dataprovider-orchestration-platform/charts/values.yaml patched/dataprovider-orchestration-platform/charts/values.yaml
+--- charts/dataprovider-orchestration-platform/charts/values.yaml	2026-11-06 20:09:04.399390661 +0000
++++ patched/dataprovider-orchestration-platform/charts/values.yaml	2026-11-06 20:30:38.566372889 +0000
+@@ -94,3 +94,8 @@
+   chart_name: gateway-oauth2-client
+   valueFiles:
+     - values.yaml
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""
+diff -ruN charts/governance-authority-agent-chart/charts/templates/application.yaml patched/governance-authority-agent-chart/charts/templates/application.yaml
+--- charts/governance-authority-agent-chart/charts/templates/application.yaml	2026-11-06 20:07:44.315385900 +0000
++++ patched/governance-authority-agent-chart/charts/templates/application.yaml	2026-11-06 20:30:38.529443434 +0000
+@@ -37,6 +37,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.authority) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -66,6 +71,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.authority) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -95,6 +105,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.authority) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+diff -ruN charts/governance-authority-agent-chart/charts/values.yaml patched/governance-authority-agent-chart/charts/values.yaml
+--- charts/governance-authority-agent-chart/charts/values.yaml	2026-11-06 20:07:44.739385925 +0000
++++ patched/governance-authority-agent-chart/charts/values.yaml	2026-11-06 20:30:38.529500519 +0000
+@@ -42,3 +42,9 @@
+   targetRevision: 1.0.1
+   chart_name: authority-monitoring
+   valuesBranch: v1.0.1
++
++# Optional shared (wildcard) certificate: perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcard:
++    secretName: ""   # default: <namespaceTag>-wildcard-tls

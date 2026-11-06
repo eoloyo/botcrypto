@@ -1,0 +1,698 @@
+diff -ruN pulled/consent-management-fe-1.0.0-rc.184/consent-management-fe/templates/ingress.yaml pulled-patched/consent-management-fe-1.0.0-rc.184/consent-management-fe/templates/ingress.yaml
+--- pulled/consent-management-fe-1.0.0-rc.184/consent-management-fe/templates/ingress.yaml	2026-11-06 20:11:26.541109800 +0000
++++ pulled-patched/consent-management-fe-1.0.0-rc.184/consent-management-fe/templates/ingress.yaml	2026-11-06 20:30:38.976308548 +0000
+@@ -9,15 +9,19 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostFe . }}-cert{{ end }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN pulled/consent-management-fe-1.0.0-rc.184/consent-management-fe/values.yaml pulled-patched/consent-management-fe-1.0.0-rc.184/consent-management-fe/values.yaml
+--- pulled/consent-management-fe-1.0.0-rc.184/consent-management-fe/values.yaml	2026-11-06 20:11:26.540957932 +0000
++++ pulled-patched/consent-management-fe-1.0.0-rc.184/consent-management-fe/values.yaml	2026-11-06 20:30:38.976544026 +0000
+@@ -98,4 +98,7 @@
+ cors:
+   allowOrigin: "" # ingress separed by comma
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: "" # issuer ingress name
+diff -ruN pulled/contract-consumption-be-1.27.0/contract-consumption-be/templates/ingress.yaml pulled-patched/contract-consumption-be-1.27.0/contract-consumption-be/templates/ingress.yaml
+--- pulled/contract-consumption-be-1.27.0/contract-consumption-be/templates/ingress.yaml	2026-11-06 20:11:00.096419763 +0000
++++ pulled-patched/contract-consumption-be-1.27.0/contract-consumption-be/templates/ingress.yaml	2026-11-06 20:30:38.977125418 +0000
+@@ -5,14 +5,18 @@
+   name: {{ .Release.Name }}
+   namespace: {{ .Release.Namespace }}
+   annotations:
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     acme.cert-manager.io/http01-edit-in-place: "true"
++    {{- end }}
+     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClass }}
+ spec:
+   tls:
+     - hosts:
+         - {{ .Release.Name }}.{{ .Values.domainSuffix}}
+-      secretName: {{ .Release.Name }}-tls
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ .Release.Name }}-tls{{ end }}
+   rules:
+     - host: {{ .Release.Name }}.{{ .Values.domainSuffix}}
+       http:
+diff -ruN pulled/contract-consumption-be-1.27.0/contract-consumption-be/values.yaml pulled-patched/contract-consumption-be-1.27.0/contract-consumption-be/values.yaml
+--- pulled/contract-consumption-be-1.27.0/contract-consumption-be/values.yaml	2026-11-06 20:11:00.096280334 +0000
++++ pulled-patched/contract-consumption-be-1.27.0/contract-consumption-be/values.yaml	2026-11-06 20:30:38.977318915 +0000
+@@ -45,6 +45,9 @@
+     
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   # enable ingress only for development purpose
+   # on production environment this service must be exposted through the participant tier1 gateway only
+   enabled: false
+diff -ruN pulled/eck-monitoring-1.1.1/eck-monitoring/templates/apm-server.yaml pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/apm-server.yaml
+--- pulled/eck-monitoring-1.1.1/eck-monitoring/templates/apm-server.yaml	2026-11-06 20:12:09.718007341 +0000
++++ pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/apm-server.yaml	2026-11-06 20:30:38.978549573 +0000
+@@ -46,13 +46,15 @@
+   name: {{ .Release.Name }}-apm-server
+   annotations:
+     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+       - {{ template "apmServer.dns" . }}
+-    secretName: {{ .Release.Name }}-apm-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-apm-ssl{{ end }}
+   rules:
+     - host: {{ template "apmServer.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.1.1/eck-monitoring/templates/elasticsearch.yaml pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/elasticsearch.yaml
+--- pulled/eck-monitoring-1.1.1/eck-monitoring/templates/elasticsearch.yaml	2026-11-06 20:12:09.718038011 +0000
++++ pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/elasticsearch.yaml	2026-11-06 20:30:38.978396136 +0000
+@@ -149,13 +149,15 @@
+   name: {{ .Release.Name }}-elasticsearch-http-public
+   annotations:
+     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+     - {{ template "elasticsearch.dns" . }}
+-    secretName: {{ .Release.Name }}-elasticsearch-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-elasticsearch-ssl{{ end }}
+   rules:
+     - host: {{ template "elasticsearch.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.1.1/eck-monitoring/templates/kibana-pdf-job.yaml pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/kibana-pdf-job.yaml
+--- pulled/eck-monitoring-1.1.1/eck-monitoring/templates/kibana-pdf-job.yaml	2026-11-06 20:12:09.718088174 +0000
++++ pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/kibana-pdf-job.yaml	2026-11-06 20:30:38.978046205 +0000
+@@ -259,13 +259,15 @@
+ metadata:
+   name: {{ .Release.Name }}-kibana-pdf-export
+   annotations:
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+       - {{ template "kibana_pdf_export.dns" . }}
+-    secretName: {{ .Release.Name }}-pdf-export-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-pdf-export-ssl{{ end }}
+   rules:
+     - host: {{ template "kibana_pdf_export.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.1.1/eck-monitoring/templates/kibana.yaml pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/kibana.yaml
+--- pulled/eck-monitoring-1.1.1/eck-monitoring/templates/kibana.yaml	2026-11-06 20:12:09.718103150 +0000
++++ pulled-patched/eck-monitoring-1.1.1/eck-monitoring/templates/kibana.yaml	2026-11-06 20:30:38.977662878 +0000
+@@ -107,13 +107,15 @@
+   name: {{ .Release.Name }}-kibana-dashboard
+   annotations:
+     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+       - {{ template "kibana.dns" . }}
+-    secretName: {{ .Release.Name }}-kibana-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-kibana-ssl{{ end }}
+   rules:
+     - host: {{ template "kibana.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.1.1/eck-monitoring/values.yaml pulled-patched/eck-monitoring-1.1.1/eck-monitoring/values.yaml
+--- pulled/eck-monitoring-1.1.1/eck-monitoring/values.yaml	2026-11-06 20:12:09.717921607 +0000
++++ pulled-patched/eck-monitoring-1.1.1/eck-monitoring/values.yaml	2026-11-06 20:30:38.978807348 +0000
+@@ -1559,4 +1559,8 @@
+       cpu: 50m
+     limits:
+       memory: 0.5Gi
+-      cpu: 300m
+\ No newline at end of file
++      cpu: 300m
++
++# Name of an existing TLS Secret (e.g. a wildcard certificate) for the Ingress. When set, the cert-manager annotation
++# is dropped and this Secret is used.
++existingTlsSecret: ""
+diff -ruN pulled/eck-monitoring-1.4.0/eck-monitoring/templates/apm-server.yaml pulled-patched/eck-monitoring-1.4.0/eck-monitoring/templates/apm-server.yaml
+--- pulled/eck-monitoring-1.4.0/eck-monitoring/templates/apm-server.yaml	2026-11-06 20:11:18.720061920 +0000
++++ pulled-patched/eck-monitoring-1.4.0/eck-monitoring/templates/apm-server.yaml	2026-11-06 20:30:38.979704095 +0000
+@@ -46,13 +46,15 @@
+   name: {{ .Release.Name }}-apm-server
+   annotations:
+     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+       - {{ template "apmServer.dns" . }}
+-    secretName: {{ .Release.Name }}-apm-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-apm-ssl{{ end }}
+   rules:
+     - host: {{ template "apmServer.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.4.0/eck-monitoring/templates/elasticsearch.yaml pulled-patched/eck-monitoring-1.4.0/eck-monitoring/templates/elasticsearch.yaml
+--- pulled/eck-monitoring-1.4.0/eck-monitoring/templates/elasticsearch.yaml	2026-11-06 20:11:18.720153573 +0000
++++ pulled-patched/eck-monitoring-1.4.0/eck-monitoring/templates/elasticsearch.yaml	2026-11-06 20:30:38.979544850 +0000
+@@ -153,13 +153,15 @@
+   name: {{ .Release.Name }}-elasticsearch-http-public
+   annotations:
+     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+     - {{ template "elasticsearch.dns" . }}
+-    secretName: {{ .Release.Name }}-elasticsearch-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-elasticsearch-ssl{{ end }}
+   rules:
+     - host: {{ template "elasticsearch.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.4.0/eck-monitoring/templates/kibana.yaml pulled-patched/eck-monitoring-1.4.0/eck-monitoring/templates/kibana.yaml
+--- pulled/eck-monitoring-1.4.0/eck-monitoring/templates/kibana.yaml	2026-11-06 20:11:18.720247465 +0000
++++ pulled-patched/eck-monitoring-1.4.0/eck-monitoring/templates/kibana.yaml	2026-11-06 20:30:38.979118860 +0000
+@@ -130,13 +130,15 @@
+   name: {{ .Release.Name }}-kibana-dashboard
+   annotations:
+     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
++    {{- end }}
+ spec:
+   ingressClassName: nginx
+   tls:
+   - hosts:
+       - {{ template "kibana.dns" . }}
+-    secretName: {{ .Release.Name }}-kibana-ssl
++    secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ .Release.Name }}-kibana-ssl{{ end }}
+   rules:
+     - host: {{ template "kibana.dns" . }}
+       http:
+diff -ruN pulled/eck-monitoring-1.4.0/eck-monitoring/values.yaml pulled-patched/eck-monitoring-1.4.0/eck-monitoring/values.yaml
+--- pulled/eck-monitoring-1.4.0/eck-monitoring/values.yaml	2026-11-06 20:11:18.719930940 +0000
++++ pulled-patched/eck-monitoring-1.4.0/eck-monitoring/values.yaml	2026-11-06 20:30:38.980001134 +0000
+@@ -1996,4 +1996,8 @@
+       cpu: 50m
+     limits:
+       memory: 0.5Gi
+-      cpu: 300m
+\ No newline at end of file
++      cpu: 300m
++
++# Name of an existing TLS Secret (e.g. a wildcard certificate) for the Ingress. When set, the cert-manager annotation
++# is dropped and this Secret is used.
++existingTlsSecret: ""
+diff -ruN pulled/edc-connector-adapter-1.20.0/edc-connector-adapter/templates/ingress.yaml pulled-patched/edc-connector-adapter-1.20.0/edc-connector-adapter/templates/ingress.yaml
+--- pulled/edc-connector-adapter-1.20.0/edc-connector-adapter/templates/ingress.yaml	2026-11-06 20:11:01.649926762 +0000
++++ pulled-patched/edc-connector-adapter-1.20.0/edc-connector-adapter/templates/ingress.yaml	2026-11-06 20:30:38.980360250 +0000
+@@ -5,14 +5,18 @@
+   name: {{ .Release.Name }}
+   namespace: {{ .Release.Namespace }}
+   annotations:
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     acme.cert-manager.io/http01-edit-in-place: "true"
++    {{- end }}
+     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClass }}
+ spec:
+   tls:
+     - hosts:
+         - {{ .Release.Name }}.{{ .Values.domainSuffix}}
+-      secretName: {{ .Release.Name }}-tls
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ .Release.Name }}-tls{{ end }}
+   rules:
+     - host: {{ .Release.Name }}.{{ .Values.domainSuffix}}
+       http:
+diff -ruN pulled/edc-connector-adapter-1.20.0/edc-connector-adapter/values.yaml pulled-patched/edc-connector-adapter-1.20.0/edc-connector-adapter/values.yaml
+--- pulled/edc-connector-adapter-1.20.0/edc-connector-adapter/values.yaml	2026-11-06 20:11:01.649792102 +0000
++++ pulled-patched/edc-connector-adapter-1.20.0/edc-connector-adapter/values.yaml	2026-11-06 20:30:38.980508612 +0000
+@@ -86,6 +86,9 @@
+     #         periodSeconds: 60
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   # enable ingress only for development purpose
+   # on production environment this service must be exposted through the participant tier1 gateway only
+   enabled: false
+diff -ruN pulled/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/templates/ingress.yaml pulled-patched/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/templates/ingress.yaml
+--- pulled/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/templates/ingress.yaml	2026-11-06 20:10:44.010414507 +0000
++++ pulled-patched/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/templates/ingress.yaml	2026-11-06 20:30:38.980776970 +0000
+@@ -9,15 +9,19 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostFe . }}-cert{{ end }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN pulled/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/values.yaml pulled-patched/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/values.yaml
+--- pulled/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/values.yaml	2026-11-06 20:10:44.010298093 +0000
++++ pulled-patched/fe-authentication-provider-3.1.0-rc.336/fe-authentication-provider/values.yaml	2026-11-06 20:30:38.980940779 +0000
+@@ -97,4 +97,7 @@
+ cors:
+   allowOrigin: "" # ingress separed by comma
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: "" # issuer ingress name
+diff -ruN pulled/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/templates/ingress.yaml pulled-patched/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/templates/ingress.yaml
+--- pulled/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/templates/ingress.yaml	2026-11-06 20:10:39.582536658 +0000
++++ pulled-patched/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/templates/ingress.yaml	2026-11-06 20:30:38.981142960 +0000
+@@ -9,15 +9,19 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostFe . }}-cert{{ end }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN pulled/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/values.yaml pulled-patched/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/values.yaml
+--- pulled/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/values.yaml	2026-11-06 20:10:39.582412308 +0000
++++ pulled-patched/fe-identity-provider-3.1.0-rc.1075/fe-identity-provider/values.yaml	2026-11-06 20:30:38.981281750 +0000
+@@ -97,4 +97,7 @@
+ cors:
+   allowOrigin: "" # ingress separed by comma
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: "" # issuer ingress name
+diff -ruN pulled/fe-onboarding-3.1.0-rc.943/fe-onboarding/templates/ingress.yaml pulled-patched/fe-onboarding-3.1.0-rc.943/fe-onboarding/templates/ingress.yaml
+--- pulled/fe-onboarding-3.1.0-rc.943/fe-onboarding/templates/ingress.yaml	2026-11-06 20:10:41.204071163 +0000
++++ pulled-patched/fe-onboarding-3.1.0-rc.943/fe-onboarding/templates/ingress.yaml	2026-11-06 20:30:38.981479568 +0000
+@@ -9,15 +9,19 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostFe . }}-cert{{ end }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN pulled/fe-onboarding-3.1.0-rc.943/fe-onboarding/values.yaml pulled-patched/fe-onboarding-3.1.0-rc.943/fe-onboarding/values.yaml
+--- pulled/fe-onboarding-3.1.0-rc.943/fe-onboarding/values.yaml	2026-11-06 20:10:41.203918473 +0000
++++ pulled-patched/fe-onboarding-3.1.0-rc.943/fe-onboarding/values.yaml	2026-11-06 20:30:38.981607634 +0000
+@@ -97,4 +97,7 @@
+ cors:
+   allowOrigin: "" # ingress separed by comma
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: "" # issuer ingress name
+diff -ruN pulled/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/templates/ingress.yaml pulled-patched/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/templates/ingress.yaml
+--- pulled/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/templates/ingress.yaml	2026-11-06 20:10:42.603261108 +0000
++++ pulled-patched/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/templates/ingress.yaml	2026-11-06 20:30:38.981871429 +0000
+@@ -9,15 +9,19 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostFe . }}-cert{{ end }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN pulled/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/values.yaml pulled-patched/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/values.yaml
+--- pulled/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/values.yaml	2026-11-06 20:10:42.603147187 +0000
++++ pulled-patched/fe-security-attribute-provider-3.1.0-rc.441/fe-security-attribute-provider/values.yaml	2026-11-06 20:30:38.982047853 +0000
+@@ -97,4 +97,7 @@
+ cors:
+   allowOrigin: "" # ingress separed by comma
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: "" # issuer ingress name
+diff -ruN pulled/gateway-oauth2-client-1.1.0/gateway-oauth2-client/templates/ingress.yaml pulled-patched/gateway-oauth2-client-1.1.0/gateway-oauth2-client/templates/ingress.yaml
+--- pulled/gateway-oauth2-client-1.1.0/gateway-oauth2-client/templates/ingress.yaml	2026-11-06 20:12:00.566112570 +0000
++++ pulled-patched/gateway-oauth2-client-1.1.0/gateway-oauth2-client/templates/ingress.yaml	2026-11-06 20:30:38.982340580 +0000
+@@ -6,15 +6,19 @@
+   annotations:
+     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostGateway . }}
+-      secretName: {{ tpl .Values.hostGateway . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostGateway . }}-cert{{ end }}
+   rules:
+     - host: {{ tpl .Values.hostGateway . }}
+       http:
+diff -ruN pulled/gateway-oauth2-client-1.1.0/gateway-oauth2-client/values.yaml pulled-patched/gateway-oauth2-client-1.1.0/gateway-oauth2-client/values.yaml
+--- pulled/gateway-oauth2-client-1.1.0/gateway-oauth2-client/values.yaml	2026-11-06 20:12:00.566024380 +0000
++++ pulled-patched/gateway-oauth2-client-1.1.0/gateway-oauth2-client/values.yaml	2026-11-06 20:30:38.982497960 +0000
+@@ -6,6 +6,9 @@
+ hostGateway: ""
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: ""
+ 
+ server-port: &server-port 9000
+diff -ruN pulled/monitoring-proxy-2.0.0/monitoring-proxy/templates/ingress.yaml pulled-patched/monitoring-proxy-2.0.0/monitoring-proxy/templates/ingress.yaml
+--- pulled/monitoring-proxy-2.0.0/monitoring-proxy/templates/ingress.yaml	2026-11-06 20:11:21.919940667 +0000
++++ pulled-patched/monitoring-proxy-2.0.0/monitoring-proxy/templates/ingress.yaml	2026-11-06 20:30:38.983056642 +0000
+@@ -9,12 +9,14 @@
+     nginx.ingress.kubernetes.io/proxy-body-size: 50m
+     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+     nginx.ingress.kubernetes.io/ssl-redirect: "true"
++    {{- if not .Values.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer | quote }}
++    {{- end }}
+ spec:
+   ingressClassName: {{ .Values.frontend.ingress.className }}
+   tls:
+     - hosts: [{{ include "monitoring.host" . | quote }}]
+-      secretName: {{ default (printf "%s-nginx" .Release.Name) .Values.frontend.ingress.tlsSecretName }}
++      secretName: {{ if .Values.existingTlsSecret }}{{ .Values.existingTlsSecret }}{{ else }}{{ default (printf "%s-nginx" .Release.Name) .Values.frontend.ingress.tlsSecretName }}{{ end }}
+   rules:
+     - host: {{ include "monitoring.host" . | quote }}
+       http:
+diff -ruN pulled/monitoring-proxy-2.0.0/monitoring-proxy/values.yaml pulled-patched/monitoring-proxy-2.0.0/monitoring-proxy/values.yaml
+--- pulled/monitoring-proxy-2.0.0/monitoring-proxy/values.yaml	2026-11-06 20:11:21.919848049 +0000
++++ pulled-patched/monitoring-proxy-2.0.0/monitoring-proxy/values.yaml	2026-11-06 20:30:38.983189940 +0000
+@@ -75,3 +75,7 @@
+   backend:
+     serviceName: monitoring-reporting-be
+     port: 8080
++
++# Name of an existing TLS Secret (e.g. a wildcard certificate) for the Ingress. When set, the cert-manager annotation
++# is dropped and this Secret is used.
++existingTlsSecret: ""
+diff -ruN pulled/schema-sync-adapter-1.9.0/schema-sync-adapter/templates/ingress.yaml pulled-patched/schema-sync-adapter-1.9.0/schema-sync-adapter/templates/ingress.yaml
+--- pulled/schema-sync-adapter-1.9.0/schema-sync-adapter/templates/ingress.yaml	2026-11-06 20:11:03.117584017 +0000
++++ pulled-patched/schema-sync-adapter-1.9.0/schema-sync-adapter/templates/ingress.yaml	2026-11-06 20:30:38.984155040 +0000
+@@ -5,14 +5,18 @@
+   name: {{ .Release.Name }}
+   namespace: {{ .Release.Namespace }}
+   annotations:
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     acme.cert-manager.io/http01-edit-in-place: "true"
++    {{- end }}
+     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClass }}
+ spec:
+   tls:
+     - hosts:
+         - {{ .Release.Name }}.{{ .Values.domainSuffix}}
+-      secretName: {{ .Release.Name }}-tls
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ .Release.Name }}-tls{{ end }}
+   rules:
+     - host: {{ .Release.Name }}.{{ .Values.domainSuffix}}
+       http:
+diff -ruN pulled/schema-sync-adapter-1.9.0/schema-sync-adapter/values.yaml pulled-patched/schema-sync-adapter-1.9.0/schema-sync-adapter/values.yaml
+--- pulled/schema-sync-adapter-1.9.0/schema-sync-adapter/values.yaml	2026-11-06 20:11:03.117456724 +0000
++++ pulled-patched/schema-sync-adapter-1.9.0/schema-sync-adapter/values.yaml	2026-11-06 20:30:38.984309854 +0000
+@@ -11,6 +11,9 @@
+   tag: "1.9.0"
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   # enable ingress only for development purpose
+   # on production environment this service must be exposed through the participant tier1 gateway only
+   enabled: false
+diff -ruN pulled/sd-creation-wizard-1.33.0/sd-creation-wizard/templates/ingress.yaml pulled-patched/sd-creation-wizard-1.33.0/sd-creation-wizard/templates/ingress.yaml
+--- pulled/sd-creation-wizard-1.33.0/sd-creation-wizard/templates/ingress.yaml	2026-11-06 20:11:35.102384713 +0000
++++ pulled-patched/sd-creation-wizard-1.33.0/sd-creation-wizard/templates/ingress.yaml	2026-11-06 20:30:38.984668503 +0000
+@@ -5,14 +5,18 @@
+   name: {{ .Release.Name }}-creation-wizard-api
+   namespace: {{ .Release.Namespace }}
+   annotations:
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     acme.cert-manager.io/http01-edit-in-place: "true"
++    {{- end }}
+     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClass }}
+ spec:
+   tls:
+     - hosts:
+         - creation-wizard-api.{{ .Values.domainSuffix }}
+-      secretName: creation-wizard-api-tls
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}creation-wizard-api-tls{{ end }}
+   rules:
+     - host: creation-wizard-api.{{ .Values.domainSuffix }}
+       http:
+diff -ruN pulled/sd-creation-wizard-1.33.0/sd-creation-wizard/values.yaml pulled-patched/sd-creation-wizard-1.33.0/sd-creation-wizard/values.yaml
+--- pulled/sd-creation-wizard-1.33.0/sd-creation-wizard/values.yaml	2026-11-06 20:11:35.102250406 +0000
++++ pulled-patched/sd-creation-wizard-1.33.0/sd-creation-wizard/values.yaml	2026-11-06 20:30:38.984822593 +0000
+@@ -121,6 +121,9 @@
+ 
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   # enable ingress only for development purpose
+   # on production environment this service must be exposed through the participant tier1 gateway only
+   enabled: false
+diff -ruN pulled/simpl-files-1.5.0/simpl-files/templates/ingress.yaml pulled-patched/simpl-files-1.5.0/simpl-files/templates/ingress.yaml
+--- pulled/simpl-files-1.5.0/simpl-files/templates/ingress.yaml	2026-11-06 20:11:33.598250411 +0000
++++ pulled-patched/simpl-files-1.5.0/simpl-files/templates/ingress.yaml	2026-11-06 20:30:38.985176190 +0000
+@@ -4,8 +4,12 @@
+   name: {{ include "nginx-chart.fullname" . }}
+   namespace: {{ .Release.Namespace }}
+   annotations:
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     acme.cert-manager.io/http01-edit-in-place: "true"
++    {{- end }}
+     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClass }}
+ spec:
+   rules:
+@@ -22,4 +26,4 @@
+   tls:
+     - hosts:
+         - {{ .Values.ingress.hostname }}
+-      secretName: {{ .Values.ingress.secretName }}
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ .Values.ingress.secretName }}{{ end }}
+diff -ruN pulled/simpl-files-1.5.0/simpl-files/values.yaml pulled-patched/simpl-files-1.5.0/simpl-files/values.yaml
+--- pulled/simpl-files-1.5.0/simpl-files/values.yaml	2026-11-06 20:11:33.598160978 +0000
++++ pulled-patched/simpl-files-1.5.0/simpl-files/values.yaml	2026-11-06 20:30:38.985297665 +0000
+@@ -18,6 +18,9 @@
+     memory: "128Mi"
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   hostname: files.dev.simpl-europe.eu
+   secretName: simpl-tls-files
+   clusterIssuer: dev-prod
+diff -ruN pulled/tier1-gateway-3.1.0-rc.1516/tier1-gateway/templates/ingress.yaml pulled-patched/tier1-gateway-3.1.0-rc.1516/tier1-gateway/templates/ingress.yaml
+--- pulled/tier1-gateway-3.1.0-rc.1516/tier1-gateway/templates/ingress.yaml	2026-11-06 20:10:36.139191174 +0000
++++ pulled-patched/tier1-gateway-3.1.0-rc.1516/tier1-gateway/templates/ingress.yaml	2026-11-06 20:30:38.985706155 +0000
+@@ -7,8 +7,12 @@
+     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+     nginx.ingress.kubernetes.io/enable-cors: "true"
+     {{- with .Values.cors.allowOrigin }}
+@@ -19,7 +23,7 @@
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostT1 . }}
+-      secretName: {{ tpl .Values.hostT1 . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostT1 . }}-cert{{ end }}
+   rules:
+     - host: {{ tpl .Values.hostT1 . }}
+       http:
+diff -ruN pulled/tier1-gateway-3.1.0-rc.1516/tier1-gateway/values.yaml pulled-patched/tier1-gateway-3.1.0-rc.1516/tier1-gateway/values.yaml
+--- pulled/tier1-gateway-3.1.0-rc.1516/tier1-gateway/values.yaml	2026-11-06 20:10:36.139027853 +0000
++++ pulled-patched/tier1-gateway-3.1.0-rc.1516/tier1-gateway/values.yaml	2026-11-06 20:30:38.985873103 +0000
+@@ -32,6 +32,9 @@
+ # Ingress / TLS configuration
+ # ------------------------------------------------------------------------------
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   # Issuer name used to request TLS certificates for the Ingress
+   issuer: ""
+ 
+diff -ruN pulled/users-roles-fe-3.1.0-rc.982/users-roles-fe/templates/ingress.yaml pulled-patched/users-roles-fe-3.1.0-rc.982/users-roles-fe/templates/ingress.yaml
+--- pulled/users-roles-fe-3.1.0-rc.982/users-roles-fe/templates/ingress.yaml	2026-11-06 20:10:37.760632223 +0000
++++ pulled-patched/users-roles-fe-3.1.0-rc.982/users-roles-fe/templates/ingress.yaml	2026-11-06 20:30:38.986276125 +0000
+@@ -9,15 +9,19 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}{{ tpl .Values.hostFe . }}-cert{{ end }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN pulled/users-roles-fe-3.1.0-rc.982/users-roles-fe/values.yaml pulled-patched/users-roles-fe-3.1.0-rc.982/users-roles-fe/values.yaml
+--- pulled/users-roles-fe-3.1.0-rc.982/users-roles-fe/values.yaml	2026-11-06 20:10:37.760508481 +0000
++++ pulled-patched/users-roles-fe-3.1.0-rc.982/users-roles-fe/values.yaml	2026-11-06 20:30:38.986416325 +0000
+@@ -97,4 +97,7 @@
+ cors:
+   allowOrigin: "" # ingress separed by comma
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   issuer: "" # issuer ingress name
+diff -ruN pulled/xfsc-advsearch-1.29.0/xfsc-advsearch/templates/ingress.yaml pulled-patched/xfsc-advsearch-1.29.0/xfsc-advsearch/templates/ingress.yaml
+--- pulled/xfsc-advsearch-1.29.0/xfsc-advsearch/templates/ingress.yaml	2026-11-06 20:11:06.169174091 +0000
++++ pulled-patched/xfsc-advsearch-1.29.0/xfsc-advsearch/templates/ingress.yaml	2026-11-06 20:30:38.986649912 +0000
+@@ -5,14 +5,18 @@
+   name: {{ .Release.Name }}
+   namespace: {{ .Release.Namespace }}
+   annotations:
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
++    {{- end }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     acme.cert-manager.io/http01-edit-in-place: "true"
++    {{- end }}
+     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClass }}
+ spec:
+   tls:
+     - hosts:
+         - {{ .Release.Name }}.{{ .Values.domainSuffix}}
+-      secretName: xfsc-advsearch-be-tls
++      secretName: {{ if .Values.ingress.existingTlsSecret }}{{ .Values.ingress.existingTlsSecret }}{{ else }}xfsc-advsearch-be-tls{{ end }}
+   rules:
+     - host: {{ .Release.Name }}.{{ .Values.domainSuffix}}
+       http:
+diff -ruN pulled/xfsc-advsearch-1.29.0/xfsc-advsearch/values.yaml pulled-patched/xfsc-advsearch-1.29.0/xfsc-advsearch/values.yaml
+--- pulled/xfsc-advsearch-1.29.0/xfsc-advsearch/values.yaml	2026-11-06 20:11:06.169082928 +0000
++++ pulled-patched/xfsc-advsearch-1.29.0/xfsc-advsearch/values.yaml	2026-11-06 20:30:38.986819660 +0000
+@@ -39,6 +39,9 @@
+ 
+ 
+ ingress:
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the cert-manager
++  # annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+   # enable ingress only for development purpose
+   # on production environment this service must be exposted through the participant tier1 gateway only
+   enabled: false
