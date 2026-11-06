@@ -196,3 +196,28 @@ BROWSER TEST: ALL CHECKS PASSED
   [PASS] lab CA not left in the browser trust store
 RUN ALL: EVERYTHING PASSED
 ```
+
+## Let's Encrypt staging probe (separate run, 2026-11-06)
+
+```
+### 0. zone simpl-lab-282f7e2b.eu (random, not registered), local BIND for it
+  [PASS] local BIND is running, authoritative for simpl-lab-282f7e2b.eu
+  [PASS] cert-manager's DNS-01 self-check resolver is the local BIND
+### 1. real Let's Encrypt STAGING: account + wildcard order, DNS-01 solved through the local BIND
+  [PASS] registered an account with Let's Encrypt staging: https://acme-staging-v02.api.letsencrypt.org/acme/acct/366594573
+  waiting for Let's Encrypt to try to validate (up to 4 minutes)...
+  order state=invalid; 3 authorizations; wildcard=3; challenge types offered by Let's Encrypt: ['dns-01', 'dns-persist-01']
+  challenge fe.consumer1.simpl-lab-282f7e2b.eu         type=DNS-01 presented=False state=invalid
+     Let's Encrypt/cert-manager reason: Error accepting authorization: acme: authorization error for fe.consumer1.simpl-lab-282f7e2b.eu: 400 urn:ietf:params:acme:error:dns: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.fe.consumer1.simpl-lab-282f7e2b.eu - check that a DNS record exists for this domain
+  challenge be.consumer1.simpl-lab-282f7e2b.eu         type=DNS-01 presented=False state=pending
+  challenge consumer1.simpl-lab-282f7e2b.eu            type=DNS-01 presented=False state=invalid
+     Let's Encrypt/cert-manager reason: Error accepting authorization: acme: authorization error for consumer1.simpl-lab-282f7e2b.eu: 400 urn:ietf:params:acme:error:dns: DNS problem: NXDOMAIN looking up TXT for _acme-challenge.consumer1.simpl-lab-282f7e2b.eu - check that a DNS record exists for this domain
+  [PASS] Let's Encrypt accepted an order with 3 wildcard names
+  [PASS] for wildcard names Let's Encrypt offered no http-01 (offered: ['dns-01', 'dns-persist-01']): a default HTTP-01 issuer can never get one
+  [PASS] cert-manager published all 3 challenge TXT records in the local BIND, TSIG-signed (3 added, 3 removed again after the failure)
+  [PASS] Let's Encrypt REJECTED the validation with a DNS error: it looked in the public DNS, not in our local BIND
+  [PASS] no certificate was issued
+LET'S ENCRYPT PROBE: ALL CHECKS PASSED
+=== EXIT 0
+=== DONE
+```

@@ -2,6 +2,7 @@
 # run_all.sh — every test of this prototype from a clean slate, then tear down and check the lab cluster is as it was found.
 #
 # Needs: docker, helm, node + playwright, certutil, openssl; the ../../k8s-gvisor cluster (container k3s-gvisor) running.
+# WITH_LE=1 adds the Let's Encrypt staging probe (letsencrypt_probe.sh).
 # Takes about half an hour (gVisor pods start slowly; the renewal test waits two minutes for cert-manager).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; cd "$HERE"
@@ -27,6 +28,9 @@ run ./cluster_test.sh migrate
 run ./serve_test.sh
 run ./acme_test.sh
 run ./browser_test.sh
+if [ "${WITH_LE:-0}" = 1 ]; then   # opt-in: needs internet access to Let's Encrypt staging; sandbox only (proxy-ca)
+  run ./cert_manager.sh proxy-ca; run ./letsencrypt_probe.sh; run ./letsencrypt_probe.sh teardown
+fi
 run ./acme_test.sh teardown; run ./ingress_nginx.sh uninstall; run ./cert_manager.sh uninstall
 
 echo; echo "################ lab restored?"

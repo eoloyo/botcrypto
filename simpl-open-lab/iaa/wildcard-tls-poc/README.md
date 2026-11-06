@@ -33,6 +33,7 @@ deep and keeps its Governance-Authority-issued identity certificate: it is not c
 | 2 | `serve_test.sh` (rollback) | switching the same Ingresses back to per-host mode: 11/11 hosts served their own certificate again | pass |
 | 3 | `acme_test.sh` | a real **ACME wildcard order over DNS-01** (Pebble ACME server + BIND with TSIG dynamic updates, cert-manager's rfc2136 solver): order `valid`, 3 wildcard authorizations each via `dns-01`, issued by Pebble in ~70 s, then served for all 11 hosts through ingress-nginx and verified | pass |
 | 3 | `acme_test.sh` (T2) | the guide's **default HTTP-01 issuer** asked for the same wildcard: never issued; the Order stays `pending` forever and the only signal is a Warning event *"no configured challenge solvers can be used for this challenge"* | confirmed |
+| 4a | `letsencrypt_probe.sh` | the **real Let's Encrypt staging** server, with a **local BIND** serving the challenge records: cert-manager registers an account, orders the three wildcard names, gets only `dns-01` / `dns-persist-01` challenges (no `http-01`), publishes all 3 TXT records in the local BIND (TSIG-signed, BIND's log confirms) and then **Let's Encrypt rejects it**: *"DNS problem: NXDOMAIN looking up TXT for _acme-challenge.…"* — it queried the public DNS, never our BIND | pass (opt-in: `WITH_LE=1 ./run_all.sh`) |
 | 2/5 | `browser_test.sh` | **real Chromium**, lab CA in its trust store (normal chain + hostname verification): all 11 covered hosts load a real page over HTTPS; uncovered hosts are refused | pass |
 
 (Results are those of the last `./run_all.sh`; see `RESULTS.md` for the log excerpt.)
@@ -63,9 +64,14 @@ Every check was also shown to be able to fail (sensitivity runs against unpatche
 
 ## Not covered — read before relying on this
 
-- **Level 4: no real DNS provider and no Let's Encrypt.** Level 3 proves cert-manager's ACME/DNS-01 wildcard handling against Pebble and BIND; it says
-  nothing about the OVH solver in Simpl's guide, real propagation delays, API rate limits or Let's Encrypt's certificate limits. That needs a
-  throwaway domain plus DNS API credentials (Let's Encrypt **staging** is enough).
+- **Level 4: a real certificate from Let's Encrypt needs a domain whose DNS is public.** Let's Encrypt *is* reachable, and the lab's
+  cert-manager now registers an account with its staging server (`letsencrypt_probe.sh`). Two things were in the way, neither is "no internet":
+  (1) this sandbox re-signs egress TLS with its own CA, which cert-manager's pod did not trust (`x509: certificate signed by unknown authority`);
+  `./cert_manager.sh proxy-ca` gives the controller that CA bundle (sandbox only); (2) Let's Encrypt validates DNS-01 against the **public**
+  DNS, so a local DNS server (BIND works fine, see level 3 with Pebble) cannot satisfy it: the probe shows the real NXDOMAIN rejection.
+  What would complete it: a registered domain whose nameservers are reachable from the internet and that cert-manager can update through an API.
+  Not this sandbox, which has no inbound reachability. A throwaway domain plus API credentials at any DNS provider (or a free deSEC `dedyn.io`
+  subdomain) and Let's Encrypt **staging** would do; it still would not test the OVH solver unless the domain is at OVH.
 - **Level 5: no ArgoCD install of the official charts.** The chain umbrella -> IAA bundle -> component charts is proved by `helm template`
   on the real charts, not by a deployment. Not done: the other five consumer bundles and the provider umbrella (same edit, not applied);
   the authority chart's inline Ingress; third-party charts (Keycloak, Gitea, Kibana, the Kafka/other UIs); who consumes

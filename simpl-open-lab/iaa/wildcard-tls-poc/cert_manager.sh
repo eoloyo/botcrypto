@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cert_manager.sh install|uninstall — cert-manager in the ../../k8s-gvisor lab cluster (container k3s-gvisor).
+# cert_manager.sh install|uninstall|proxy-ca — cert-manager in the ../../k8s-gvisor lab cluster (container k3s-gvisor).
 #
 # install:   pull the three images on the host, import them into the cluster's containerd (the cluster itself cannot reach
 #            quay.io), apply the release manifest, and run the pods under gVisor. Without runtimeClassName=runsc the
@@ -39,6 +39,23 @@ PROBE
     sleep 5
   done
   log "not ready in time"; $K -n cert-manager get pods; exit 1 ;;
+proxy-ca)
+  # SANDBOX ONLY. This sandbox's egress path re-signs TLS with its own interception CA; cert-manager then fails with
+  # "x509: certificate signed by unknown authority" when it talks to a real ACME server. Give the controller that CA bundle.
+  [ -r /root/.ccr/ca-bundle.crt ] || { echo "no /root/.ccr/ca-bundle.crt: not in the sandbox?"; exit 1; }
+  python3 - <<'PY' | docker exec -i k3s-gvisor kubectl apply -f - >/dev/null || exit 1
+import json
+print(json.dumps({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "egress-ca", "namespace": "cert-manager"},
+                  "data": {"ca-bundle.crt": open("/root/.ccr/ca-bundle.crt").read()}}))
+PY
+  # strategic merge: creates the volumes list if absent (the controller has none) and merges containers/env by name
+  $K -n cert-manager patch deploy cert-manager --type strategic -p '{"spec":{"template":{"spec":{
+      "volumes":[{"name":"egress-ca","configMap":{"name":"egress-ca"}}],
+      "containers":[{"name":"cert-manager-controller",
+        "volumeMounts":[{"name":"egress-ca","mountPath":"/etc/egress-ca","readOnly":true}],
+        "env":[{"name":"SSL_CERT_FILE","value":"/etc/egress-ca/ca-bundle.crt"}]}]}}}}' >/dev/null || exit 1
+  sleep 5; $K -n cert-manager rollout status deploy/cert-manager --timeout=240s >/dev/null 2>&1
+  log "cert-manager now trusts the sandbox egress CA (SSL_CERT_FILE); ready replicas: $($K -n cert-manager get deploy cert-manager -o jsonpath='{.status.readyReplicas}')" ;;
 uninstall)
   $K delete ns poc-agent poc-real --ignore-not-found --wait=false >/dev/null 2>&1
   $K delete certificate --all -n authority01 --ignore-not-found >/dev/null 2>&1
