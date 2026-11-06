@@ -1,84 +1,78 @@
-# Wildcard TLS for a Simpl agent — prototype
+# Wildcard TLS for a Simpl agent — prototype and end-to-end tests
 
-Answers "what would it take to change the charts to support a wildcard certificate?" by doing the core of it on the lab
-cluster (`../../k8s-gvisor`) and measuring. **What it proves is the chart mechanics. It does not prove real wildcard
-issuance** (see "Not covered").
+Question: *what would it take to let a Simpl agent use one shared (wildcard) certificate instead of one certificate per
+hostname, and how can we be sure it works?* This directory is the change, plus tests at five levels, run on the lab
+cluster (`../../k8s-gvisor`). Level 4 (a real DNS provider and Let's Encrypt) cannot be done in this sandbox: see the end.
 
 ```bash
-# one-time: the six chart dirs the patch applies to (copies; the lab repos are left alone)
-W=/root/simpl-open-lab-work/wildcard-poc; mkdir -p $W/orig $W/patched
-for c in tier1-gateway authentication-provider-fe identity-provider-fe onboarding-fe security-attribute-provider-fe users-roles-fe; do
-  cp -r /root/simpl-agent-build/src/$c/charts $W/orig/$c; cp -r /root/simpl-agent-build/src/$c/charts $W/patched/$c; done
-patch -p1 -d $W/patched < wildcard-tls.patch      # run from this directory; $W/orig stays untouched
-
-./render_check.sh $W/orig $W/patched     # helm-template regression checks, no cluster
-./cert_manager.sh install                # cert-manager in the lab cluster (3 pods under gVisor)
-./cluster_test.sh                        # per-host (today) vs wildcard, on a real cert-manager
-./cluster_test.sh migrate                # switch an existing per-host deployment to wildcard in place
-./cert_manager.sh uninstall              # restore the lab cluster
+./run_all.sh     # everything below from a clean slate (~30 min), then tears down and checks the lab is as it was found
 ```
 
 ## The change
 
 | File | What |
 |---|---|
-| `wildcard-tls.patch` | the six ingress templates (`tier1-gateway` + five frontends) and their `values.yaml` |
-| `agent-tls/` | a small chart: one `Certificate` with the wildcard names, built from `domainSuffix` + `namespaceTag` |
+| `wildcard-tls.patch` | six component charts' ingress templates (`tier1-gateway` + five frontends): new value `ingress.existingTlsSecret`, default empty = today's behaviour; when set, the cert-manager annotations are dropped and the shared Secret is used |
+| `umbrella-plumbing.patch` | the switch carried down the real chain: `consumer-agent-chart` (umbrella) -> `consumer-iaa` (bundle) -> component charts. Pinned to the commits of 2026-11-06. Only the IAA bundle is done |
+| `agent-tls/` | a small chart: one `Certificate` with the wildcard names from `domainSuffix` + `namespaceTag` (and optional `duration`/`renewBefore`) |
 
-Per Ingress template, about 6 lines:
+A wildcard matches **one** DNS label, so a consumer needs three entries: `*.<ns>.<domain>`, `*.fe.<ns>.<domain>`,
+`*.be.<ns>.<domain>` (a provider also `*.crossplane.<ns>.<domain>`). The Tier-2 host `tls.participant.<ns>…` is two labels
+deep and keeps its Governance-Authority-issued identity certificate: it is not covered, by design.
 
-```yaml
-{{- if not .Values.ingress.existingTlsSecret }}
-cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
-cert-manager.io/renew-before: "720h"
-{{- end }}
-...
-secretName: {{ default (printf "%s-cert" (tpl .Values.hostFe .)) .Values.ingress.existingTlsSecret }}
-```
+## What was tested, level by level
 
-`ingress.existingTlsSecret` defaults to empty, which is today's behaviour. A wildcard matches one DNS label, so the
-three entries in `agent-tls/values.yaml` are `*.<ns>.<domain>`, `*.fe.<ns>.<domain>`, `*.be.<ns>.<domain>`
-(a provider also needs `*.crossplane.<ns>.<domain>` for `gitea.crossplane`).
+| Level | Script | What it proves | Result |
+|---|---|---|---|
+| 1a | `render_check.sh` | default render is **byte-identical** to the original; an old values file (no new key) renders identically; wildcard mode drops the annotations and uses the shared secret. Six charts x six checks | 36 / 36; the same check fails (12) on unpatched charts |
+| 1b | `plumbing.py check` | on the **real** umbrella + IAA bundle: default output byte-identical; wildcard reaches 6 bundles, the bundle's own Ingress, 4 of 4 component apps (consumer) / 5 of 5 (data provider); the bundle's rendered values drive the real patched component charts | 14 / 14; an empty patch fails 7 checks |
+| 1c | `cluster_test.sh` | on cert-manager v1.19.1: 11 hosts -> **11 certificates** today, **1** with the wildcard; all 11 covered and 5 must-not-match hosts not covered (`openssl -checkhost`); the six real charts: 2 certificates today, 1 with wildcard | all pass |
+| 1d | `cluster_test.sh migrate` | migrating a live per-host deployment in place leaves the 11 old per-host Certificates behind (still Ingress-owned): an explicit cleanup is needed; after it they are not recreated | confirmed |
+| 2 | `serve_test.sh` | with a real **ingress-nginx 1.13.7**, a TLS handshake per hostname: per-host mode serves each host its own certificate; wildcard mode serves all 11 the **one** certificate (matches the Secret, chains to the CA, matches the hostname); uncovered hosts are not served it; a control proves the test can see a wrong (fake) certificate | all pass; converges in 1–4 s |
+| 2 | `serve_test.sh` (renewal) | duration 1h / renewBefore 58m: cert-manager renews after **120 s** (revision 1 -> 2) and nginx serves the new certificate at once, **without a restart**, to all 11 hosts | pass |
+| 2 | `serve_test.sh` (rollback) | switching the same Ingresses back to per-host mode: 11/11 hosts served their own certificate again | pass |
+| 3 | `acme_test.sh` | a real **ACME wildcard order over DNS-01** (Pebble ACME server + BIND with TSIG dynamic updates, cert-manager's rfc2136 solver): order `valid`, 3 wildcard authorizations each via `dns-01`, issued by Pebble in ~70 s, then served for all 11 hosts through ingress-nginx and verified | pass |
+| 3 | `acme_test.sh` (T2) | the guide's **default HTTP-01 issuer** asked for the same wildcard: never issued; the Order stays `pending` forever and the only signal is a Warning event *"no configured challenge solvers can be used for this challenge"* | confirmed |
+| 2/5 | `browser_test.sh` | **real Chromium**, lab CA in its trust store (normal chain + hostname verification): all 11 covered hosts load a real page over HTTPS; uncovered hosts are refused | pass |
 
-## Results
+(Results are those of the last `./run_all.sh`; see `RESULTS.md` for the log excerpt.)
 
-| Check | Result |
-|---|---|
-| Render, 6 charts x 6 checks: default output **byte-identical** to the original; an **old values file without the new key** renders identically; wildcard mode drops the cert-manager annotations, uses the shared secret, leaves hostnames untouched | **36 / 36** |
-| The same check run against *unpatched* charts (must fail) | 12 failures, as it should |
-| Today, 11 consumer hosts, one Ingress each | **11 Certificates**, 11 TLS secrets |
-| Today, the six real charts (5 frontends on one host + the gateway) | 6 Ingresses -> **2 Certificates**; shared secrets cause no cert-manager complaints |
-| Wildcard mode, the same 11 hosts | **1 Certificate**, SANs `*.consumer1…`, `*.fe.consumer1…`, `*.be.consumer1…` |
-| Coverage by `openssl x509 -checkhost` | all **11 hosts covered** |
-| Must *not* match | `tls.participant.<ns>…` (the Tier-2 host, which keeps its GA-issued identity certificate), `gitea.crossplane.<ns>…`, the bare `<ns>…`, another agent's namespace, a 3-label host: **all correctly not covered** |
-| Wildcard mode, six real charts | 6 Ingresses on 2 hosts -> 1 Certificate |
-| **Migration** of a live per-host deployment, in place | the Ingresses switch to the wildcard secret and the wildcard certificate is issued, but the **11 old per-host Certificates stay behind** (still owned by their Ingresses). They need an explicit cleanup; after it, cert-manager does not recreate them |
+## What the tests found along the way
 
-## Things found on the way
+**In the product / operations**
+- **Migration needs a cleanup step.** Removing the annotation does not remove the per-host Certificates cert-manager already made.
+- **An HTTP-01-only issuer plus a wildcard fails silently**: no `failed` state, just a pending Order and one Warning event.
+- **ingress-nginx protects an uncovered host**: it refuses to serve a wildcard that does not cover the host, falls back to its
+  *fake* certificate and logs `SSL certificate "…" does not contain a Common Name or Subject Alternative Name for server "…"`.
+  Users see a generic untrusted-certificate error; the cause is only in the controller log.
+- **Renewal is hot**: nginx swaps in the renewed certificate within seconds, no restart.
+- **The charts are not uniform**: the IAA bundle has its own inline Ingress with a hard-coded per-host secret (a seventh
+  template type); `consent-management-fe` is only rendered for `type=data-provider`; the users-roles app passes the issuer under
+  `global.ingress.issuer` (a different key, and I could not find what consumes it in the local chart).
+- **cert-manager acts on any Ingress with its annotation**, including the lab's `authority01` ones (their issuer is the unresolved
+  `${CLUSTERISSUER}`), and is not usable just because its pods are Ready: the webhook rejects everything until cainjector has
+  injected its CA. Pods need `runtimeClassName: runsc` in this cluster.
 
-- **My first render check was vacuous.** `Chart.yaml` carries the CI placeholder `version: ${PROJECT_RELEASE_VERSION}`,
-  which helm rejects, so every render was an error and "identical output" compared two identical errors. The check now
-  normalises the placeholder in temp copies, requires a real `kind: Ingress`, and was shown to fail on unpatched charts.
-- **cert-manager acts on the lab's existing Ingresses.** The `authority01` Ingresses carry the cert-manager annotation with
-  the unresolved value `${CLUSTERISSUER}`, so installing cert-manager created two never-ready Certificates there.
-  `cert_manager.sh uninstall` removes them and restores the cluster (checked: same namespaces, 7 Ingresses, no stray secrets).
-- **Pods need `runtimeClassName: runsc`.** Without it the sandboxes fail (`runc create failed … can't get final child's PID`).
-- **"Ready" is not enough for cert-manager.** The webhook rejects every Certificate with `x509: certificate signed by
-  unknown authority` until cainjector has injected its CA, even with three Ready pods and a webhook endpoint. The install
-  script now waits for a server-side dry-run of a ClusterIssuer to be admitted.
+**In my own tests (all fixed; recorded because they would have produced false confidence)**
+1. The first render check was vacuous: `Chart.yaml` has the CI placeholder `${PROJECT_RELEASE_VERSION}`, helm rejected every render and "identical output" compared two identical errors.
+2. The first serving test accepted *any* non-fake certificate, so after a reset nginx's cached old certificates looked like failures, and a "renewal" that cert-manager never did (revision unchanged) looked like a pass. The Kubernetes Secret is now the ground truth and renewal is proved by the revision.
+3. Chromium inside this sandbox sent traffic through the egress proxy (`--no-proxy-server` is ignored by Playwright; its `proxy.bypass` works). The test now requires the lab CA as issuer.
+4. `echo "$LOGS" | grep -q` under `pipefail` fails on large logs (SIGPIPE). Here-strings are used instead.
+
+Every check was also shown to be able to fail (sensitivity runs against unpatched charts / an empty patch / a control Ingress).
 
 ## Not covered — read before relying on this
 
-- **No real wildcard issuance.** The issuer is a lab CA (selfSigned -> CA). A real wildcard needs an ACME **DNS-01**
-  issuer and a DNS provider, which this sandbox doesn't have. Simpl's guide also says a private CA is unsupported for the
-  platform; the lab CA is only a test device here.
-- **No ingress controller in the cluster**, so nothing was served over TLS. Coverage was checked on the issued
-  certificate with `openssl`, not by a browser or nginx.
-- **Only the six component templates and the `agent-tls` chart.** The umbrella agent charts and the ~15 bundle charts
-  were not modified, so the `tls.mode` switch passed down through the ArgoCD `valuesObject`, and the sync-wave ordering
-  (Certificate before Ingress), are untested. Third-party charts (Keycloak, Gitea, Kibana, Kafka/other UIs) are untouched
-  and have their own TLS value schemas.
-- **Secrets are per-namespace.** Two namespaces were exercised; a real agent spans several, each needing its own
-  Certificate (or a secret replicator).
+- **Level 4: no real DNS provider and no Let's Encrypt.** Level 3 proves cert-manager's ACME/DNS-01 wildcard handling against Pebble and BIND; it says
+  nothing about the OVH solver in Simpl's guide, real propagation delays, API rate limits or Let's Encrypt's certificate limits. That needs a
+  throwaway domain plus DNS API credentials (Let's Encrypt **staging** is enough).
+- **Level 5: no ArgoCD install of the official charts.** The chain umbrella -> IAA bundle -> component charts is proved by `helm template`
+  on the real charts, not by a deployment. Not done: the other five consumer bundles and the provider umbrella (same edit, not applied);
+  the authority chart's inline Ingress; third-party charts (Keycloak, Gitea, Kibana, the Kafka/other UIs); who consumes
+  `global.ingress.issuer`; the `agent-tls` chart as an ArgoCD Application (the umbrella needs somewhere to host it) and Certificate-before-Ingress
+  sync-wave ordering.
+- **No login flow through the wildcard.** Hostnames do not change, so CORS and Keycloak redirect settings should not either, but a Keycloak/OIDC login through the wildcard was not run. The browser test loads a placeholder nginx page, not a Simpl UI.
+- **Issuers are a lab CA and Pebble.** Simpl's guide says a private CA is unsupported for the platform; the lab CA is only a test device. The ACME test trusts Pebble's CA as a partial chain.
+- **Secrets are per-namespace.** Two namespaces were exercised; a real agent spans several, each needing its own Certificate (or a secret replicator).
 - The 11 consumer hostnames are read from the charts; three billing names are placeholders for chart overrides.
 - Tier-2 identity certificates are not involved and were not touched.

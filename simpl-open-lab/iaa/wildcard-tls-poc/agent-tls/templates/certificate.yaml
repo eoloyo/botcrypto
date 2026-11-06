@@ -8,7 +8,10 @@ metadata:
     argocd.argoproj.io/sync-wave: "-5"   # request it before the Ingresses that reference the Secret
 spec:
   secretName: {{ tpl .Values.tls.wildcard.secretName . }}
-  renewBefore: 720h
+  {{- with .Values.tls.wildcard.duration }}
+  duration: {{ . }}
+  {{- end }}
+  renewBefore: {{ .Values.tls.wildcard.renewBefore }}
   issuerRef:
     kind: ClusterIssuer
     name: {{ required "cluster.issuer is required" .Values.cluster.issuer }}

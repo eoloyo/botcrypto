@@ -1,0 +1,185 @@
+diff -ruN a/consumer-agent-chart/charts/templates/application.yaml b/consumer-agent-chart/charts/templates/application.yaml
+--- a/consumer-agent-chart/charts/templates/application.yaml	2026-11-06 18:57:25.786169141 +0000
++++ b/consumer-agent-chart/charts/templates/application.yaml	2026-11-06 18:57:44.853732378 +0000
+@@ -39,6 +39,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -70,6 +75,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -101,6 +111,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -131,6 +146,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -161,6 +181,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+@@ -191,6 +216,11 @@
+           namespace: {{ .Values.cluster.namespace }}
+           commonToolsNamespace: {{ .Values.cluster.commonToolsNamespace }}
+           issuer: {{ .Values.cluster.issuer }}
++        {{- if eq (.Values.tls.mode | default "perHost") "wildcard" }}
++        tls:
++          mode: wildcard
++          wildcardSecretName: {{ .Values.tls.wildcard.secretName | default (printf "%s-wildcard-tls" .Values.namespaceTag.consumer) }}
++        {{- end }}
+         secrets:
+           role: {{ .Values.secrets.role }}
+           secretEngine: {{ .Values.secrets.secretEngine }}
+diff -ruN a/consumer-agent-chart/charts/values.yaml b/consumer-agent-chart/charts/values.yaml
+--- a/consumer-agent-chart/charts/values.yaml	2026-11-06 18:57:26.518169184 +0000
++++ b/consumer-agent-chart/charts/values.yaml	2026-11-06 18:57:44.853830639 +0000
+@@ -64,3 +64,9 @@
+   targetRevision: 1.0.1
+   chart_name: consumer-monitoring
+   valuesBranch: v1.0.1
++
++# Optional shared (wildcard) certificate: perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcard:
++    secretName: ""   # default: <namespaceTag>-wildcard-tls
+diff -ruN a/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml b/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml
+--- a/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml	2026-11-06 18:57:34.258169644 +0000
++++ b/consumer-iaa/charts/templates/applications/_authentication_provider_fe-application.yaml	2026-11-06 18:57:44.854222218 +0000
+@@ -11,6 +11,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ .Values.tls.wildcardSecretName | quote }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN a/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml b/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml
+--- a/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml	2026-11-06 18:57:35.094169694 +0000
++++ b/consumer-iaa/charts/templates/applications/_consent_management_fe-application.yaml	2026-11-06 18:57:44.853989432 +0000
+@@ -11,6 +11,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ .Values.tls.wildcardSecretName | quote }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN a/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml b/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml
+--- a/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml	2026-11-06 18:57:36.518169779 +0000
++++ b/consumer-iaa/charts/templates/applications/_tier1_gateway-application.yaml	2026-11-06 18:57:44.854123319 +0000
+@@ -22,6 +22,9 @@
+         {{- end }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ .Values.tls.wildcardSecretName | quote }}
++        {{- end }}
+       keycloakUrl: http://keycloak.{{ .Values.cluster.namespace }}.svc.cluster.local
+       usersRolesUrl: http://users-roles-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+       authenticationProviderUrl: http://authentication-provider-be.{{ .Values.cluster.namespace }}.svc.cluster.local:8080
+diff -ruN a/consumer-iaa/charts/templates/applications/_users_roles-application.yaml b/consumer-iaa/charts/templates/applications/_users_roles-application.yaml
+--- a/consumer-iaa/charts/templates/applications/_users_roles-application.yaml	2026-11-06 18:57:38.074169871 +0000
++++ b/consumer-iaa/charts/templates/applications/_users_roles-application.yaml	2026-11-06 18:57:44.854541779 +0000
+@@ -22,6 +22,9 @@
+       global:
+         ingress:
+           issuer: {{ .Values.cluster.issuer }}
++          {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++          existingTlsSecret: {{ .Values.tls.wildcardSecretName | quote }}
++          {{- end }}
+       keycloak:
+         master:
+           password: vault:{{ .Values.secrets.secretEngine }}/data/{{ .Values.cluster.namespace }}-keycloak#admin
+diff -ruN a/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml b/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml
+--- a/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml	2026-11-06 18:57:38.490169896 +0000
++++ b/consumer-iaa/charts/templates/applications/_users_roles_fe-application.yaml	2026-11-06 18:57:44.854395586 +0000
+@@ -12,6 +12,9 @@
+       hostFe: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+       ingress:
+         issuer: {{ .Values.cluster.issuer }}
++        {{- if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}
++        existingTlsSecret: {{ .Values.tls.wildcardSecretName | quote }}
++        {{- end }}
+       cors:
+         allowOrigin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://participant.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+       env:
+diff -ruN a/consumer-iaa/charts/templates/frontend/root/ingress.yaml b/consumer-iaa/charts/templates/frontend/root/ingress.yaml
+--- a/consumer-iaa/charts/templates/frontend/root/ingress.yaml	2026-11-06 18:57:39.858169977 +0000
++++ b/consumer-iaa/charts/templates/frontend/root/ingress.yaml	2026-11-06 18:57:44.854919400 +0000
+@@ -2,8 +2,10 @@
+ kind: Ingress
+ metadata:
+   annotations:
++    {{- if not (eq ((.Values.tls | default dict).mode | default "perHost") "wildcard") }}
+     cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
+     cert-manager.io/renew-before: 720h
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: https://participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},https://consumer.be.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }},http://localhost:4202,http://localhost:4203,http://localhost:3000
+@@ -28,4 +30,4 @@
+   tls:
+     - hosts:
+         - participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}
+-      secretName: participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}-cert
++      secretName: {{ if eq ((.Values.tls | default dict).mode | default "perHost") "wildcard" }}{{ .Values.tls.wildcardSecretName }}{{ else }}participant.fe.{{ tpl .Values.namespaceTag.participant . }}.{{ .Values.domainSuffix }}-cert{{ end }}
+diff -ruN a/consumer-iaa/charts/values.yaml b/consumer-iaa/charts/values.yaml
+--- a/consumer-iaa/charts/values.yaml	2026-11-06 18:57:44.846170274 +0000
++++ b/consumer-iaa/charts/values.yaml	2026-11-06 18:57:44.853891950 +0000
+@@ -214,3 +214,8 @@
+   enabled: false
+ oid4vp:
+   enabled: false
++
++# Set by the umbrella chart. perHost = today's behaviour
++tls:
++  mode: perHost
++  wildcardSecretName: ""

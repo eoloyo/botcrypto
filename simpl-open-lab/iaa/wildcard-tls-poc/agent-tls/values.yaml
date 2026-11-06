@@ -8,6 +8,8 @@ tls:
   mode: wildcard        # perHost = today's behaviour (renders nothing); wildcard = one shared certificate
   wildcard:
     secretName: "{{ .Values.namespaceTag }}-wildcard-tls"
+    duration: ""          # empty = the issuer's default; cert-manager minimum is 1h (used by the renewal test)
+    renewBefore: 720h     # same as the per-host Ingress annotation
     # A wildcard matches exactly ONE label, so the two-label hosts (participant.fe, participant.be) need their own entries.
     # Provider agents also need  "*.crossplane.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}"  (gitea.crossplane).
     names:
