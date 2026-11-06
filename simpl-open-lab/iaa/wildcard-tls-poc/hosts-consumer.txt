@@ -1,0 +1,12 @@
+# hostnames of one consumer agent (see the earlier chart analysis); billing names are placeholders for the chart's nameOverrides
+participant.fe.consumer1.dataspace.example.eu
+participant.be.consumer1.dataspace.example.eu
+catalogue-ui.consumer1.dataspace.example.eu
+contract-consumption-be.consumer1.dataspace.example.eu
+xsfc-advsearch-be.consumer1.dataspace.example.eu
+infrastructure-fe.consumer1.dataspace.example.eu
+contract.consumer1.dataspace.example.eu
+contract-ui.consumer1.dataspace.example.eu
+wallet.consumer1.dataspace.example.eu
+simpl.consumer1.dataspace.example.eu
+reporting.consumer1.dataspace.example.eu

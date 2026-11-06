@@ -1,0 +1,196 @@
+diff -ruN orig/authentication-provider-fe/templates/ingress.yaml patched/authentication-provider-fe/templates/ingress.yaml
+--- orig/authentication-provider-fe/templates/ingress.yaml	2026-11-06 18:11:38.434247711 +0000
++++ patched/authentication-provider-fe/templates/ingress.yaml	2026-11-06 18:11:59.974398263 +0000
+@@ -9,15 +9,17 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ default (printf "%s-cert" (tpl .Values.hostFe .)) .Values.ingress.existingTlsSecret }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN orig/authentication-provider-fe/values.yaml patched/authentication-provider-fe/values.yaml
+--- orig/authentication-provider-fe/values.yaml	2026-11-06 18:11:38.434282538 +0000
++++ patched/authentication-provider-fe/values.yaml	2026-11-06 18:11:59.974751842 +0000
+@@ -98,3 +98,6 @@
+   allowOrigin: "" # ingress separed by comma
+ ingress:
+   issuer: "" # issuer ingress name
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the
++  # cert-manager annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+diff -ruN orig/identity-provider-fe/templates/ingress.yaml patched/identity-provider-fe/templates/ingress.yaml
+--- orig/identity-provider-fe/templates/ingress.yaml	2026-11-06 18:11:38.443407589 +0000
++++ patched/identity-provider-fe/templates/ingress.yaml	2026-11-06 18:11:59.974859496 +0000
+@@ -9,15 +9,17 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ default (printf "%s-cert" (tpl .Values.hostFe .)) .Values.ingress.existingTlsSecret }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN orig/identity-provider-fe/values.yaml patched/identity-provider-fe/values.yaml
+--- orig/identity-provider-fe/values.yaml	2026-11-06 18:11:38.443588280 +0000
++++ patched/identity-provider-fe/values.yaml	2026-11-06 18:11:59.974938560 +0000
+@@ -98,3 +98,6 @@
+   allowOrigin: "" # ingress separed by comma
+ ingress:
+   issuer: "" # issuer ingress name
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the
++  # cert-manager annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+diff -ruN orig/onboarding-fe/templates/ingress.yaml patched/onboarding-fe/templates/ingress.yaml
+--- orig/onboarding-fe/templates/ingress.yaml	2026-11-06 18:11:38.447827850 +0000
++++ patched/onboarding-fe/templates/ingress.yaml	2026-11-06 18:11:59.975021217 +0000
+@@ -9,15 +9,17 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ default (printf "%s-cert" (tpl .Values.hostFe .)) .Values.ingress.existingTlsSecret }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN orig/onboarding-fe/values.yaml patched/onboarding-fe/values.yaml
+--- orig/onboarding-fe/values.yaml	2026-11-06 18:11:38.447860757 +0000
++++ patched/onboarding-fe/values.yaml	2026-11-06 18:11:59.975095180 +0000
+@@ -98,3 +98,6 @@
+   allowOrigin: "" # ingress separed by comma
+ ingress:
+   issuer: "" # issuer ingress name
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the
++  # cert-manager annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+diff -ruN orig/security-attribute-provider-fe/templates/ingress.yaml patched/security-attribute-provider-fe/templates/ingress.yaml
+--- orig/security-attribute-provider-fe/templates/ingress.yaml	2026-11-06 18:11:38.451864437 +0000
++++ patched/security-attribute-provider-fe/templates/ingress.yaml	2026-11-06 18:11:59.975177544 +0000
+@@ -9,15 +9,17 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ default (printf "%s-cert" (tpl .Values.hostFe .)) .Values.ingress.existingTlsSecret }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN orig/security-attribute-provider-fe/values.yaml patched/security-attribute-provider-fe/values.yaml
+--- orig/security-attribute-provider-fe/values.yaml	2026-11-06 18:11:38.451898414 +0000
++++ patched/security-attribute-provider-fe/values.yaml	2026-11-06 18:11:59.975249864 +0000
+@@ -98,3 +98,6 @@
+   allowOrigin: "" # ingress separed by comma
+ ingress:
+   issuer: "" # issuer ingress name
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the
++  # cert-manager annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+diff -ruN orig/tier1-gateway/templates/ingress.yaml patched/tier1-gateway/templates/ingress.yaml
+--- orig/tier1-gateway/templates/ingress.yaml	2026-11-06 18:11:38.430817633 +0000
++++ patched/tier1-gateway/templates/ingress.yaml	2026-11-06 18:11:59.975324970 +0000
+@@ -6,8 +6,10 @@
+   annotations:
+     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+     nginx.ingress.kubernetes.io/enable-cors: "true"
+     {{- with .Values.cors.allowOrigin }}
+@@ -18,7 +20,7 @@
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostT1 . }}
+-      secretName: {{ tpl .Values.hostT1 . }}-cert
++      secretName: {{ default (printf "%s-cert" (tpl .Values.hostT1 .)) .Values.ingress.existingTlsSecret }}
+   rules:
+     - host: {{ tpl .Values.hostT1 . }}
+       http:
+diff -ruN orig/tier1-gateway/values.yaml patched/tier1-gateway/values.yaml
+--- orig/tier1-gateway/values.yaml	2026-11-06 18:11:38.430861642 +0000
++++ patched/tier1-gateway/values.yaml	2026-11-06 18:11:59.975405424 +0000
+@@ -35,6 +35,9 @@
+ ingress:
+   # Issuer name used to request TLS certificates for the Ingress
+   issuer: ""
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the
++  # cert-manager annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""
+ 
+ # ------------------------------------------------------------------------------
+ # Deployment configuration
+diff -ruN orig/users-roles-fe/templates/ingress.yaml patched/users-roles-fe/templates/ingress.yaml
+--- orig/users-roles-fe/templates/ingress.yaml	2026-11-06 18:11:38.500483300 +0000
++++ patched/users-roles-fe/templates/ingress.yaml	2026-11-06 18:11:59.975499308 +0000
+@@ -9,15 +9,17 @@
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/cors-allow-headers: Access-Control-Allow-Headers,Access-Control-Allow-Credentials,Access-Control-Allow-Origin,Access-Control-Allow-Methods,Keep-Alive,User-Agent,Content-Type,Authorization,Tenant,Channel,Platform,Set-Cookie,geolocation,x-mobility-mode,device,Cache-Control,X-Request-With,Accept,Origin
+     nginx.ingress.kubernetes.io/cors-allow-origin: {{ tpl .Values.cors.allowOrigin . }}
++    {{- if not .Values.ingress.existingTlsSecret }}
+     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer }}
+     cert-manager.io/renew-before: "720h"
++    {{- end }}
+     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+ spec:
+   ingressClassName: nginx
+   tls:
+     - hosts:
+         - {{ tpl .Values.hostFe . }}
+-      secretName: {{ tpl .Values.hostFe . }}-cert
++      secretName: {{ default (printf "%s-cert" (tpl .Values.hostFe .)) .Values.ingress.existingTlsSecret }}
+   rules:
+     -
+       host: {{ tpl .Values.hostFe . }}
+diff -ruN orig/users-roles-fe/values.yaml patched/users-roles-fe/values.yaml
+--- orig/users-roles-fe/values.yaml	2026-11-06 18:11:38.500523154 +0000
++++ patched/users-roles-fe/values.yaml	2026-11-06 18:11:59.975591796 +0000
+@@ -98,3 +98,6 @@
+   allowOrigin: "" # ingress separed by comma
+ ingress:
+   issuer: "" # issuer ingress name
++  # Name of an existing TLS Secret in this namespace (e.g. a wildcard certificate). When set, the
++  # cert-manager annotations are dropped, no per-host certificate is requested and this Secret is used.
++  existingTlsSecret: ""

@@ -1,0 +1,16 @@
+# Same inputs the agent charts already have.
+domainSuffix: example.com
+namespaceTag: consumer1
+cluster:
+  issuer: ""            # a ClusterIssuer that can do DNS-01 (wildcards need DNS-01), as in the agent charts
+
+tls:
+  mode: wildcard        # perHost = today's behaviour (renders nothing); wildcard = one shared certificate
+  wildcard:
+    secretName: "{{ .Values.namespaceTag }}-wildcard-tls"
+    # A wildcard matches exactly ONE label, so the two-label hosts (participant.fe, participant.be) need their own entries.
+    # Provider agents also need  "*.crossplane.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}"  (gitea.crossplane).
+    names:
+      - "*.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}"
+      - "*.fe.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}"
+      - "*.be.{{ .Values.namespaceTag }}.{{ .Values.domainSuffix }}"

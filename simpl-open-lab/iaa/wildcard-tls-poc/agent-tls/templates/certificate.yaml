@@ -1,0 +1,19 @@
+{{- if eq .Values.tls.mode "wildcard" }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ tpl .Values.tls.wildcard.secretName . }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"   # request it before the Ingresses that reference the Secret
+spec:
+  secretName: {{ tpl .Values.tls.wildcard.secretName . }}
+  renewBefore: 720h
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ required "cluster.issuer is required" .Values.cluster.issuer }}
+  dnsNames:
+  {{- range .Values.tls.wildcard.names }}
+    - {{ tpl . $ | quote }}
+  {{- end }}
+{{- end }}

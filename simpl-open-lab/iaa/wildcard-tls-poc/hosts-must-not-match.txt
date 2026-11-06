@@ -1,0 +1,6 @@
+# must NOT be covered by the agent wildcard
+tls.participant.consumer1.dataspace.example.eu       # the Tier-2 gateway host: two labels deep, and it carries the GA-issued identity certificate
+gitea.crossplane.consumer1.dataspace.example.eu      # two labels deep (a provider host: needs *.crossplane.consumer1.dataspace.example.eu)
+consumer1.dataspace.example.eu                       # the bare namespace name: a wildcard never matches the parent itself
+catalogue-ui.consumer2.dataspace.example.eu   # another agent's namespace
+a.b.fe.consumer1.dataspace.example.eu                # three labels

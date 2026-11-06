@@ -1,0 +1,5 @@
+apiVersion: v2
+name: agent-tls
+description: Optional wildcard certificate for one Simpl agent namespace (counterpart of ingress.existingTlsSecret)
+type: application
+version: 0.1.0
