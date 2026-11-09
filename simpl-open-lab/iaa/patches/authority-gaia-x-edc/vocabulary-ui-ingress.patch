@@ -1,0 +1,39 @@
+diff --git a/charts/templates/application.yaml b/charts/templates/application.yaml
+--- a/charts/templates/application.yaml
++++ b/charts/templates/application.yaml
+@@ -205,7 +205,7 @@
+         {{- end }}
+       values: |
+         ingress:
+-          enabled: false
++          enabled: {{ dig "ingress" "enabled" false .Values.simpl_vocabulary_manager_ui }}
+           hosts:
+           - host: vocabulary-manager-fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+             paths:
+@@ -217,6 +217,11 @@
+               - vocabulary-manager-fe.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}
+           annotations:
+             cert-manager.io/cluster-issuer: {{ .Values.cluster.issuer }}
++            {{- if dig "ingress" "enabled" false .Values.simpl_vocabulary_manager_ui }}
++            {{- /* simpl-vocabulary-ui 1.0.0 ships rewrite-target: /$2 for its path-based default (/vocabulary-ui(/|$)(.*)). Annotation maps merge, so with the
++                   host-based path "/" used here it would rewrite every request to "/". null removes the chart default (valid only while the chart ships it). */}}
++            nginx.ingress.kubernetes.io/rewrite-target: null
++            {{- end }}
+         env:
+           PUBLIC_AUTH_KEYCLOAK_SERVER_URL: "https://authority.be.{{ .Values.namespaceTag.authority }}.{{ .Values.domainSuffix }}"
+           PUBLIC_AUTH_KEYCLOAK_REALM: 'authority'
+diff --git a/charts/values.yaml b/charts/values.yaml
+--- a/charts/values.yaml
++++ b/charts/values.yaml
+@@ -103,6 +103,11 @@
+   targetRevision: 1.0.0
+   chart_name: simpl-vocabulary-ui
+   fullnameOverride: simpl-vocabulary-manager-ui
++  # Expose the UI through its own Ingress (host vocabulary-manager-fe.<authority namespace>.<domain>). Off by default (today's behaviour).
++  # It is an admin UI (upload / activate / deprecate vocabularies): when on, also add the host to the Tier-1 gateway's CORS allowOrigin
++  # (authority-iaa) and to the Keycloak client's redirect URIs.
++  ingress:
++    enabled: false
+   resources:
+     requests:
+       cpu: "500m"
