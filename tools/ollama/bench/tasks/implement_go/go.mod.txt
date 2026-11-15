@@ -1,0 +1,2 @@
+module skitest
+go 1.22

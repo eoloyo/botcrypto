@@ -78,6 +78,12 @@
     "trap_nothink": null
    }
   },
+  "clef:27b": {
+   "ctx": 65536,
+   "cost": "?",
+   "chat": false,
+   "notes": "decision model (yes/no, choice, scoring via /v1/systemone); not a chat model"
+  },
   "deepseek-v4-pro:0813": {
    "ctx": 1048576,
    "cost": "$$$",
@@ -112,6 +118,15 @@
     "code_agent": 1,
     "review_agent": 10
    }
+  },
+  "deepseek-v4.1-flash:1017": {
+   "ctx": 1048576,
+   "cost": "$$",
+   "probe_session_pct": 0.02,
+   "tok_s": 165,
+   "ttft_s": 0.33,
+   "think_off_works": true,
+   "notes": "pinned snapshot of deepseek-v4.1-flash; vision"
   },
   "gemma4:31b": {
    "ctx": 262144,

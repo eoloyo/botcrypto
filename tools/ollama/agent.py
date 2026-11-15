@@ -23,7 +23,7 @@ import ask as A
 READ_TOOLS = ["Read", "Glob", "Grep"]
 WRITE_TOOLS = ["Write", "Edit"]
 SAFE_BASH = ["Bash(ls:*)", "Bash(cat:*)", "Bash(go test:*)", "Bash(go build:*)", "Bash(go vet:*)", "Bash(gofmt:*)",
-             "Bash(python3 -m pytest:*)", "Bash(python3 -m py_compile:*)", "Bash(mvn -q -o test:*)",
+             "Bash(python3 -m pytest:*)", "Bash(python3 -m unittest:*)", "Bash(python3 -m py_compile:*)", "Bash(mvn -q -o test:*)",
              "Bash(git diff:*)", "Bash(git status:*)", "Bash(git log:*)"]
 
 

@@ -100,6 +100,6 @@ With a 30,000-token cap, one-shot thinking reviews scored 4.0 (`deepseek-v4.1-fl
 Caveats: one run per cell, one repository, three tasks. Treat small differences as noise.
 
 ```bash
-tools/ollama/bench.py run   --out /tmp/bench --think off     # or on / both; costs allowance
-tools/ollama/bench.py grade --out /tmp/bench                 # needs Go
+tools/ollama/bench.py run    --out /tmp/bench            # all chat models; costs allowance (see --cap)
+tools/ollama/bench.py report --out /tmp/bench
 ```
