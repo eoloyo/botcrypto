@@ -197,6 +197,7 @@ def main():
     p.add_argument("-m", "--model", help="override the role's model; comma-separated = ask each one (fan-out)")
     p.add_argument("-f", "--file", action="append", default=[], help="attach a file (repeatable)")
     p.add_argument("--stdin", action="store_true", help="append stdin to the prompt")
+    p.add_argument("--no-line-numbers", action="store_true", help="attach files verbatim (e.g. when asking for a patch)")
     p.add_argument("--think", nargs="?", const=True, default=None, help="enable reasoning (optionally low|medium|high). Costly.")
     p.add_argument("--max-tokens", type=int, help="output cap, thinking included (default: per role)")
     p.add_argument("--timeout", type=int, default=300, help="abort the stream after this many seconds")
@@ -229,8 +230,11 @@ def main():
     prompt = a.prompt
     if a.stdin:
         prompt += "\n\n```\n" + sys.stdin.read() + "\n```"
-    for f in a.file:
-        prompt += f"\n\n--- file: {f} ---\n```\n{Path(f).read_text(errors='replace')}\n```"
+    for f in a.file:      # numbered lines, so the model can cite real line numbers
+        text = Path(f).read_text(errors="replace")
+        if not a.no_line_numbers:
+            text = "\n".join(f"{i:>5}  {line}" for i, line in enumerate(text.splitlines(), 1))
+        prompt += f"\n\n--- file: {f} ---\n```\n{text}\n```"
     system = "" if a.no_briefing else None
     think = {"low": "low", "medium": "medium", "high": "high"}.get(a.think, a.think)
     targets = [[m.strip()] for m in a.model.split(",")] if a.model else [None]
