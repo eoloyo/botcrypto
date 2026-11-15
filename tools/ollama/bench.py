@@ -158,7 +158,7 @@ def t_comprehend(model, work):
 
 def t_read(model, work):
     info = A.MODELS.get(model, {})
-    if info.get("cost") == "$$$$":
+    if info.get("cost") == "$$$$" and not os.environ.get("BENCH_INCLUDE_EXPENSIVE"):
         return {"skipped": "reading ~95k tokens on a $$$$ model would cost several % of a session"}
     r = A.ask(read_prompt(), role="bulk", models=[model], think=False, max_tokens=3000, timeout=240)
     return {**_meta(r), **grade_read(r.get("content"))} if r["status"] == 200 else _meta(r)
@@ -325,9 +325,12 @@ if __name__ == "__main__":
     p.add_argument("--out", required=True)
     p.add_argument("--models")
     p.add_argument("--tests", default=",".join(TESTS))
-    p.add_argument("--cap", type=float, default=40, help="stop after spending this many % of the session allowance")
-    p.add_argument("--floor", type=float, default=12, help="stop when the session allowance falls below this %")
+    p.add_argument("--cap", type=float, default=40, help="stop after spending this many %% of the session allowance (100 = no cap)")
+    p.add_argument("--include-expensive", action="store_true", help="also run the read test on $$$$ models")
+    p.add_argument("--floor", type=float, default=12, help="stop when the session allowance falls below this %%")
     p.add_argument("--timeout", type=int, default=420, help="investigate: seconds per model")
     p.add_argument("--update-models", action="store_true", help="report: write the results into models.json")
     a = p.parse_args()
+    if a.include_expensive:
+        os.environ["BENCH_INCLUDE_EXPENSIVE"] = "1"
     {"run": run, "investigate": investigate, "report": report}[a.cmd](a)
