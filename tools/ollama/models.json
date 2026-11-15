@@ -67,7 +67,12 @@
    "tok_s": 187,
    "ttft_s": 0.6,
    "think_off_works": false,
-   "notes": "thinks even with thinking off"
+   "notes": "thinks even with thinking off",
+   "bench": {
+    "code_nothink": 1,
+    "review_nothink": 0.5,
+    "trap_nothink": null
+   }
   },
   "deepseek-v4-pro:0813": {
    "ctx": 1048576,
@@ -76,7 +81,15 @@
    "tok_s": 223,
    "ttft_s": 0.59,
    "think_off_works": true,
-   "notes": ""
+   "notes": "",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": 3.5,
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "deepseek-v4.1-flash": {
    "ctx": 1048576,
@@ -85,7 +98,15 @@
    "tok_s": 165,
    "ttft_s": 0.33,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "gemma4:31b": {
    "ctx": 262144,
@@ -94,7 +115,14 @@
    "tok_s": 286,
    "ttft_s": 0.43,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 0,
+    "review_nothink": 3.0,
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "glm-5.2": {
    "ctx": 1048576,
@@ -103,7 +131,14 @@
    "tok_s": 266,
    "ttft_s": 0.8,
    "think_off_works": true,
-   "notes": ""
+   "notes": "",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 0,
+    "review_nothink": 4.0,
+    "trap_nothink": 0,
+    "code_agent": 1
+   }
   },
   "glm-5.3": {
    "ctx": 1048576,
@@ -112,7 +147,15 @@
    "tok_s": 225,
    "ttft_s": 0.49,
    "think_off_works": true,
-   "notes": ""
+   "notes": "",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": "no answer (cap)",
+    "review_nothink": 4.0,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 0,
+    "code_agent": 1
+   }
   },
   "glm-5.3-flash": {
    "ctx": 1048576,
@@ -121,7 +164,15 @@
    "tok_s": 131,
    "ttft_s": 0.81,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "gpt-oss:120b": {
    "ctx": 131072,
@@ -130,7 +181,15 @@
    "tok_s": 318,
    "ttft_s": 0.39,
    "think_off_works": true,
-   "notes": ""
+   "notes": "",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": 2.5,
+    "trap_nothink": 0,
+    "code_agent": 1
+   }
   },
   "gpt-oss:20b": {
    "ctx": 131072,
@@ -139,7 +198,14 @@
    "tok_s": 119,
    "ttft_s": 0.44,
    "think_off_works": true,
-   "notes": ""
+   "notes": "",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 0,
+    "review_nothink": 3.0,
+    "trap_nothink": 0,
+    "code_agent": 1
+   }
   },
   "inkling-2-small": {
    "ctx": 1048576,
@@ -148,7 +214,12 @@
    "tok_s": 526,
    "ttft_s": 0.36,
    "think_off_works": false,
-   "notes": "thinks even with thinking off; vision"
+   "notes": "thinks even with thinking off; vision",
+   "bench": {
+    "code_nothink": 0,
+    "review_nothink": 4.0,
+    "trap_nothink": 1
+   }
   },
   "kimi-k2.6": {
    "ctx": 262144,
@@ -162,7 +233,15 @@
    "tok_s": 145,
    "ttft_s": 1.87,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 3.5,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "kimi-k3": {
    "ctx": 1048576,
@@ -171,7 +250,13 @@
    "tok_s": 83,
    "ttft_s": 1.52,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "trap_nothink": 1
+   }
   },
   "kimi-k3.1-pro": {
    "ctx": 1048576,
@@ -180,7 +265,14 @@
    "tok_s": 73,
    "ttft_s": 1.33,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 1.5,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1
+   }
   },
   "mimo-v2.6-flash": {
    "ctx": 1048576,
@@ -189,7 +281,15 @@
    "tok_s": 163,
    "ttft_s": 0.3,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 0.0,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "mimo-v2.6-pro": {
    "ctx": 1048576,
@@ -198,7 +298,15 @@
    "tok_s": 229,
    "ttft_s": 0.44,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1,
+    "code_agent": 1
+   }
   },
   "minimax-m3": {
    "ctx": 512000,
@@ -207,7 +315,14 @@
    "tok_s": 40,
    "ttft_s": 1.01,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": "no answer (cap)",
+    "trap_nothink": 1
+   }
   },
   "minimax-m3.1-flash": {
    "ctx": 1000000,
@@ -216,7 +331,13 @@
    "tok_s": 165,
    "ttft_s": 0.91,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": "no answer (cap)",
+    "review_nothink": 4.0,
+    "trap_nothink": 1
+   }
   },
   "mistral-large-4": {
    "ctx": 1048576,
@@ -225,7 +346,12 @@
    "tok_s": 34,
    "ttft_s": 14.7,
    "think_off_works": false,
-   "notes": "thinks even with thinking off; slow to first token; vision"
+   "notes": "thinks even with thinking off; slow to first token; vision",
+   "bench": {
+    "code_nothink": 1,
+    "review_nothink": 4.0,
+    "trap_nothink": 1
+   }
   },
   "muse-spark-open": {
    "ctx": 1048576,
@@ -234,7 +360,12 @@
    "tok_s": 184,
    "ttft_s": 0.68,
    "think_off_works": true,
-   "notes": "vision"
+   "notes": "vision",
+   "bench": {
+    "code_nothink": 1,
+    "review_nothink": 3.0,
+    "trap_nothink": 1
+   }
   },
   "nemotron-3-super": {
    "ctx": 262144,
@@ -248,7 +379,14 @@
    "tok_s": 48,
    "ttft_s": 0.7,
    "think_off_works": true,
-   "notes": ""
+   "notes": "",
+   "bench": {
+    "code_nothink": 0,
+    "code_think": 1,
+    "review_nothink": 4.0,
+    "review_think": 3.0,
+    "trap_nothink": 0
+   }
   }
  }
 }
