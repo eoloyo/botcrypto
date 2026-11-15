@@ -14,8 +14,12 @@ memory or MCP servers from the calling session), and only the tools listed below
 a scratch copy or a git worktree, never at a checkout with uncommitted work you care about, and
 verify the result yourself (run the tests, read the diff) before using it.
 
-Guards: a run is stopped when it passes --timeout, --max-input-tokens, --max-turns, or when the
-session allowance has fallen by --max-cost-pct since it started. Every run keeps a transcript.
+Guards: a run is stopped when it passes --timeout, --max-input-tokens or --max-turns, repeats the
+same tool call six times in a row, or when the session allowance has fallen by --max-cost-pct since
+it started. Every run keeps a transcript.
+
+Commands are checked before they run: with an allow-list, `$VAR`, `$(...)` and `&` are rejected.
+Tell the agent to use literal absolute paths and the Bash tool's run_in_background option.
 
 Auth is the same as ask.py: $OLLAMA_API_KEY, or the proxy-injected key in a Claude cloud session.
 """
@@ -33,7 +37,7 @@ SAFE_BASH = ["Bash(ls:*)", "Bash(cat:*)", "Bash(go test:*)", "Bash(go build:*)",
 def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeout=600,
         max_input_tokens=4_000_000, max_turns=80, max_cost_pct=3.0, log=None):
     """Run the agent. It is stopped when it exceeds the time limit, the total input-token budget, the turn
-    limit, or when the account's session allowance has dropped by more than max_cost_pct since it started
+    limit, repeats one tool call six times in a row, or when the account's session allowance has dropped by more than max_cost_pct since it started
     (an agent that keeps re-sending a huge context can otherwise burn 10%+ of a session in minutes).
     The full transcript is kept in `log` (default: ~/.cache/ollama-cloud/transcripts/)."""
     model = model or A.ROLES["agent"]["models"][0]
@@ -55,7 +59,7 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     cmd = ["claude", "-p", task, "--model", model, "--output-format", "stream-json", "--verbose", "--no-session-persistence",
            "--permission-mode", "acceptEdits" if write else "default",
            "--tools", ",".join(tools), "--allowedTools", *allowed]
-    st = {"usage": {}, "text": "", "result": None, "tools": 0}
+    st = {"usage": {}, "text": "", "result": None, "tools": 0, "last": None, "repeat": 0}
 
     def reader(proc, f):
         for line in proc.stdout:
@@ -72,7 +76,11 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
                 for c in m.get("content") or []:
                     if c.get("type") == "text" and c.get("text", "").strip():
                         st["text"] = c["text"]
-                    st["tools"] += c.get("type") == "tool_use"
+                    if c.get("type") == "tool_use":
+                        st["tools"] += 1
+                        sig = c.get("name", "") + json.dumps(c.get("input"), sort_keys=True)
+                        st["repeat"] = st["repeat"] + 1 if sig == st["last"] else 1
+                        st["last"] = sig
             elif d.get("type") == "result":
                 st["result"] = d
 
@@ -94,6 +102,8 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
                 stop = f"stopped: over {max_input_tokens:,} input tokens in total"
             elif len(st["usage"]) > max_turns:
                 stop = f"stopped: over {max_turns} turns"
+            elif st["repeat"] >= 6:
+                stop = "stopped: it repeated the same tool call 6 times in a row"
             elif b0 is not None and now - last_check > 45:
                 last_check = now
                 b = (A.balance(max_age=20) or {}).get("session_pct")
