@@ -76,7 +76,7 @@ def grade(a):
     out = Path(a.out); rows = []
     for f in sorted(out.glob("*.json")):
         d = json.loads(f.read_text())
-        if d.get("task") is None:
+        if not isinstance(d, dict) or d.get("task") is None:
             continue
         row = {"task": d["task"], "model": d["model"], "think": bool(d.get("think")), "secs": d.get("secs"),
                "out_tokens": d.get("out_tokens"), "status": d["status"]}
