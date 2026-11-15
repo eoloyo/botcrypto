@@ -39,16 +39,18 @@ def ask(model, system, prompt, think):
     if think is not None:
         body["think"] = think
     err = ""
-    for attempt in range(3):  # cloud models sometimes return transient 5xx
+    for attempt in range(5):  # transient 5xx, and 429 when the account's concurrency is full
+        wait = 5 * (attempt + 1)
         try:
             return model, _req("/api/chat", body)["message"]["content"].strip()
         except urllib.error.HTTPError as e:
             err = f"[error {e.code}] {e.read().decode(errors='replace')[:300]}"
-            if e.code < 500:
+            if e.code < 500 and e.code != 429:
                 break
+            wait = max(wait, int(e.headers.get("Retry-After") or 0))
         except Exception as e:  # network/timeouts
             err = f"[error] {e}"
-        time.sleep(3 * (attempt + 1))
+        time.sleep(wait)
     return model, err
 
 def main():
@@ -82,7 +84,8 @@ def main():
     think = {"on": True, "off": False}.get(a.think, a.think)
     models = (a.model or default_model).split(",")
 
-    with ThreadPoolExecutor(len(models)) as ex:
+    # The account allows only a few concurrent requests; more get 429 or queue into 502s.
+    with ThreadPoolExecutor(min(len(models), int(os.environ.get("OLLAMA_MAX_PARALLEL", "2")))) as ex:
         results = list(ex.map(lambda m: ask(m.strip(), system, prompt, think), models))
     for model, text in results:
         if len(results) > 1:
