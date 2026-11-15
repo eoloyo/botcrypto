@@ -52,6 +52,7 @@ INVESTIGATE = ("Review main.go in this directory: a lab-only EJBCA-compatible CA
                "Stop the shim when done.")
 WEIGHTS = {"G1": 3, "G2": 3, "G3": 1, "G4": 2, "G5": 1, "FP1": -2, "FP2": -1}
 JUDGE = "gpt-oss:120b"
+JUDGES = ["gpt-oss:120b", "deepseek-v4.1-flash"]
 
 # ---- read test: corpus and ground truth -------------------------------------------------------------
 READ_FILES = ["README.md", "catalogue/PROVIDER-PUBLICATION.md", "k8s-agent/FOOTPRINT.md", "k8s-sizing/README.md",
@@ -260,23 +261,29 @@ def investigate(a):
         subprocess.run(["pkill", "-x", "shim"])
         cell = _meta(r); cell["answer"] = r.get("content") or ""
         if cell["answer"]:
-            j = A.ask(rubric + "\n\nFor the review below decide, for each of G1 G2 G3 G4 G5 FP1 FP2, whether it applies (true/false). "
-                      'Be strict: the review must clearly make the point. Reply with JSON only, like {"G1":true,"G2":false,"G3":true,'
-                      '"G4":false,"G5":false,"FP1":false,"FP2":true}.\n\n=== REVIEW ===\n' + cell["answer"], role="general",
-                      models=[JUDGE], system="You are a strict, literal grader. Reply with JSON only.", think=True, max_tokens=8000)
-            m = re.search(r"\{.*\}", j.get("content") or "", re.S)
-            try:
-                v = json.loads(m.group(0))
-                cell["hits"] = [k for k in WEIGHTS if v.get(k)]
-                cell["score"] = sum(WEIGHTS[k] for k in cell["hits"]); cell["of"] = 10
-            except Exception:
-                pass
+            verdicts = []
+            for judge in JUDGES:                      # two judges; disagreements are flagged for a human look
+                j = A.ask(rubric + "\n\nFor the review below decide, for each of G1 G2 G3 G4 G5 FP1 FP2, whether it applies (true/false). "
+                          'Be strict: the review must clearly make the point. Reply with JSON only, like {"G1":true,"G2":false,"G3":true,'
+                          '"G4":false,"G5":false,"FP1":false,"FP2":true}.\n\n=== REVIEW ===\n' + cell["answer"], role="general",
+                          models=[judge], system="You are a strict, literal grader. Reply with JSON only.", think=True, max_tokens=12000)
+                m = re.search(r"\{.*\}", j.get("content") or "", re.S)
+                try:
+                    v = json.loads(m.group(0))
+                    verdicts.append({k: bool(v.get(k)) for k in WEIGHTS})
+                except Exception:
+                    pass
+            if verdicts:
+                cell["hits"] = {k: "".join("Y" if v[k] else "-" for v in verdicts) for k in WEIGHTS}
+                cell["score"] = round(sum(WEIGHTS[k] * sum(v[k] for v in verdicts) / len(verdicts) for k in WEIGHTS), 1)
+                cell["of"] = 10
+                cell["judges_agree"] = all(len(set(x)) == 1 for x in cell["hits"].values())
         time.sleep(15); b1 = _balance()
         if None not in (b0, b1):
             cell["cost_pct"] = round(b0 - b1, 2)
         res["tests"]["investigate"] = cell
         f.write_text(json.dumps(res, indent=1))
-        print(f"{model:26} investigate={_cell(cell)} hits={cell.get('hits')} cost={cell.get('cost_pct')}% left={b1}%", flush=True)
+        print(f"{model:26} investigate={_cell(cell)} turns={cell.get('turns')} hits={cell.get('hits')} agree={cell.get('judges_agree')} cost={cell.get('cost_pct')}% left={b1}%", flush=True)
     print("DONE", flush=True)
 
 
@@ -328,7 +335,7 @@ if __name__ == "__main__":
     p.add_argument("--cap", type=float, default=40, help="stop after spending this many %% of the session allowance (100 = no cap)")
     p.add_argument("--include-expensive", action="store_true", help="also run the read test on $$$$ models")
     p.add_argument("--floor", type=float, default=12, help="stop when the session allowance falls below this %%")
-    p.add_argument("--timeout", type=int, default=420, help="investigate: seconds per model")
+    p.add_argument("--timeout", type=int, default=600, help="investigate: seconds per model")
     p.add_argument("--update-models", action="store_true", help="report: write the results into models.json")
     a = p.parse_args()
     if a.include_expensive:
