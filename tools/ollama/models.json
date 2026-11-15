@@ -50,6 +50,13 @@
    ],
    "max_tokens": 3000,
    "instruction": "Role: reader. Answer only from the material provided; quote the file and line that supports each claim; say 'not found' when it is not there."
+  },
+  "agent": {
+   "models": [
+    "deepseek-v4.1-flash",
+    "gpt-oss:120b",
+    "mimo-v2.6-flash"
+   ]
   }
  },
  "models": {
