@@ -6,13 +6,14 @@ Examples:
   tools/ollama/ask.py -r review -f simpl-open-lab/ejbca-shim/main.go "Review this"
   git diff | tools/ollama/ask.py -r review --stdin "Review this diff"
   tools/ollama/ask.py -r bulk -f big.log "Which requests failed, and why?"
-  tools/ollama/ask.py -m glm-5.3,deepseek-v4-pro:0813 --think "Hard question"   # fan-out
+  tools/ollama/ask.py -m gpt-oss:120b,deepseek-v4.1-flash "Hard question"         # fan-out
   tools/ollama/ask.py --balance | --list | --stats
 
 What it enforces (see README.md "Limits" for the measurements behind each):
   * always streams          - non-streaming requests die with 502 after 30 s and are still billed
-  * thinking off by default - thinking multiplies cost 15-25x; opt in with --think
-  * output cap              - --max-tokens bounds what one call can cost
+  * thinking per role       - on for code/review/research (one-shot answers are poor without it),
+                              off for fast/bulk; --think / --no-think override
+  * output cap              - --max-tokens bounds what one call can cost; thinking counts against it
   * at most N in flight     - the account runs 3 at once; queued ones 502 after 30 s
   * no retry on 502         - the first attempt may still be running and billed; falls back
                               to the role's next model instead
@@ -139,7 +140,8 @@ def ask(prompt, role="general", models=None, system=None, think=None, max_tokens
     """Run `prompt` on the role's first model that answers; fall back down the role's list on failure."""
     cfg = ROLES[role]
     think = cfg.get("think", False) if think is None else think
-    max_tokens = max_tokens or cfg.get("max_tokens", 4000)
+    if not max_tokens:      # an open-ended task can spend ~20k tokens thinking before it answers
+        max_tokens = max(cfg.get("max_tokens", 4000), 32000 if think else 0)
     if system is None:
         system = ((HERE / "BRIEFING.md").read_text() + "\n\n" + cfg.get("instruction", "")).strip()
     messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
@@ -193,12 +195,13 @@ def _stats():
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("prompt", nargs="?")
-    p.add_argument("-r", "--role", choices=ROLES, default="general")
+    p.add_argument("-r", "--role", choices=[r for r in ROLES if r != "agent"], default="general")
     p.add_argument("-m", "--model", help="override the role's model; comma-separated = ask each one (fan-out)")
     p.add_argument("-f", "--file", action="append", default=[], help="attach a file (repeatable)")
     p.add_argument("--stdin", action="store_true", help="append stdin to the prompt")
     p.add_argument("--no-line-numbers", action="store_true", help="attach files verbatim (e.g. when asking for a patch)")
-    p.add_argument("--think", nargs="?", const=True, default=None, help="enable reasoning (optionally low|medium|high). Costly.")
+    p.add_argument("--think", nargs="?", const=True, default=None, help="force reasoning on (optionally low|medium|high; few models honour levels)")
+    p.add_argument("--no-think", dest="think", action="store_false", help="force reasoning off (cheap, fast, shallow)")
     p.add_argument("--max-tokens", type=int, help="output cap, thinking included (default: per role)")
     p.add_argument("--timeout", type=int, default=300, help="abort the stream after this many seconds")
     p.add_argument("--no-briefing", action="store_true")

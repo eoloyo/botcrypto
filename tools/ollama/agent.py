@@ -38,6 +38,7 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     env = {k: os.environ[k] for k in ("PATH", "HTTPS_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "LANG") if k in os.environ}
     env.update(HOME=str(home), TERM="dumb", CLAUDE_CONFIG_DIR=str(cfg), IS_SANDBOX="1", DISABLE_TELEMETRY="1",
                DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1", GOFLAGS="-buildvcs=false",
+               NO_PROXY="localhost,127.0.0.1,::1", no_proxy="localhost,127.0.0.1,::1",   # local services the agent starts
                GOPATH=os.environ.get("GOPATH", str(Path.home() / "go")),      # reuse the real module cache
                ANTHROPIC_BASE_URL=A.HOST, ANTHROPIC_API_KEY="",
                ANTHROPIC_AUTH_TOKEN=os.environ.get("OLLAMA_API_KEY", "proxy-injected"),
