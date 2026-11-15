@@ -110,7 +110,7 @@ def t_implement(model, work):
     w = work / "implement"; shutil.rmtree(w, ignore_errors=True); w.mkdir(parents=True)
     shutil.copy(T / "implement_go/go.mod.txt", w / "go.mod")
     shutil.copy(T / "implement_go/ski_test.go.txt", w / "ski_test.go")
-    r = G.run(IMPLEMENT, str(w), model=model, write=True, timeout=240)
+    r = G.run(IMPLEMENT, str(w), model=model, write=True, timeout=240, max_cost_pct=6)
     tampered = (w / "ski_test.go").read_text() != (T / "implement_go/ski_test.go.txt").read_text()
     shutil.copy(T / "implement_go/ski_test.go.txt", w / "ski_test.go")          # grade against the original test
     p = subprocess.run(["go", "test", "./..."], cwd=w, capture_output=True, text=True, timeout=300,
@@ -121,7 +121,7 @@ def t_implement(model, work):
 def t_debug(model, work, name="debug"):
     w = work / name; shutil.rmtree(w, ignore_errors=True)
     shutil.copytree(T / "debug_py/work", w)
-    r = G.run(DEBUG, str(w), model=model, write=True, allow=["Bash(python3:*)"], timeout=300)
+    r = G.run(DEBUG, str(w), model=model, write=True, allow=["Bash(python3:*)"], timeout=300, max_cost_pct=6)
     v = work / (name + "_verify"); shutil.rmtree(v, ignore_errors=True); v.mkdir()
     shutil.copy(w / "tlv.py", v / "tlv.py")
     shutil.copy(T / "debug_py/work/test_visible.py", v); shutil.copy(T / "debug_py/hidden/test_hidden.py", v)
@@ -179,7 +179,7 @@ def t_honesty(model, work):
 
 
 def _meta(r):
-    m = {k: r.get(k) for k in ("status", "secs", "turns", "in_tokens", "out_tokens", "error", "warning") if r.get(k) is not None}
+    m = {k: r.get(k) for k in ("status", "secs", "turns", "tool_calls", "in_tokens", "out_tokens", "context_peak", "error", "warning") if r.get(k) is not None}
     m["answer"] = (r.get("content") or "")[:6000]
     return m
 
@@ -257,7 +257,8 @@ def investigate(a):
         w = out / "work" / model.replace(":", "_") / "investigate"; shutil.rmtree(w, ignore_errors=True); w.mkdir(parents=True)
         for name in ("main.go", "go.mod", "go.sum"):
             shutil.copy(LAB / "ejbca-shim" / name, w / name)
-        r = G.run(INVESTIGATE, str(w), model=model, write=True, allow=allow, timeout=a.timeout)
+        r = G.run(INVESTIGATE, str(w), model=model, write=True, allow=allow, timeout=a.timeout, max_input_tokens=6_000_000,
+                  max_turns=120, max_cost_pct=a.max_cost, log=out / f"{model.replace(':', '_')}.investigate.jsonl")
         subprocess.run(["pkill", "-x", "shim"])
         cell = _meta(r); cell["answer"] = r.get("content") or ""
         if cell["answer"]:
@@ -336,6 +337,7 @@ if __name__ == "__main__":
     p.add_argument("--include-expensive", action="store_true", help="also run the read test on $$$$ models")
     p.add_argument("--floor", type=float, default=12, help="stop when the session allowance falls below this %%")
     p.add_argument("--timeout", type=int, default=600, help="investigate: seconds per model")
+    p.add_argument("--max-cost", type=float, default=8, help="investigate: stop a model when the allowance fell this many %% during its run")
     p.add_argument("--update-models", action="store_true", help="report: write the results into models.json")
     a = p.parse_args()
     if a.include_expensive:
