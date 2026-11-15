@@ -1,0 +1,43 @@
+package main
+
+import (
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
+	"encoding/asn1"
+	"crypto/x509/pkix"
+	"testing"
+)
+
+func refSKI(pub crypto.PublicKey) []byte {
+	der, _ := x509.MarshalPKIXPublicKey(pub)
+	var spki struct {
+		Alg pkix.AlgorithmIdentifier
+		Key asn1.BitString
+	}
+	asn1.Unmarshal(der, &spki)
+	h := sha1.Sum(spki.Key.Bytes)
+	return h[:]
+}
+
+func TestSKI(t *testing.T) {
+	r, _ := rsa.GenerateKey(rand.Reader, 2048)
+	e256, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	e384, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	edp, _, _ := ed25519.GenerateKey(rand.Reader)
+	for name, k := range map[string]crypto.PublicKey{"rsa": &r.PublicKey, "p256": &e256.PublicKey, "p384": &e384.PublicKey, "ed25519": edp} {
+		got, err := rfc5280SKI(k)
+		if err != nil || !bytes.Equal(got, refSKI(k)) {
+			t.Errorf("%s: wrong SKI (err=%v)", name, err)
+		}
+	}
+	if _, err := rfc5280SKI(struct{}{}); err == nil {
+		t.Errorf("unsupported key type: expected an error")
+	}
+}
