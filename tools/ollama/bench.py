@@ -183,7 +183,7 @@ def t_honesty(model, work):
 
 
 def _meta(r):
-    m = {k: r.get(k) for k in ("status", "secs", "turns", "tool_calls", "in_tokens", "out_tokens", "context_peak", "error", "warning") if r.get(k) is not None}
+    m = {k: r.get(k) for k in ("status", "effort", "secs", "turns", "tool_calls", "in_tokens", "out_tokens", "context_peak", "error", "warning") if r.get(k) is not None}
     m["answer"] = (r.get("content") or "")[:6000]
     return m
 
@@ -405,8 +405,11 @@ if __name__ == "__main__":
     p.add_argument("--parallel", type=int, default=1, help="investigate: models at once (max 3: the account's concurrency)")
     p.add_argument("--name", default="investigate", help="investigate: result key, e.g. investigate2 for a repeat run")
     p.add_argument("--max-cost", type=float, default=8, help="investigate: stop a model when the allowance fell this many %% during its run")
+    p.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"], help="agent tests: reasoning effort (default: agent.py's)")
     p.add_argument("--update-models", action="store_true", help="report: write the results into models.json")
     a = p.parse_args()
+    if a.effort:                                  # applies to every agent run of this benchmark
+        A.ROLES["agent"]["effort"] = a.effort
     if a.include_expensive:
         os.environ["BENCH_INCLUDE_EXPENSIVE"] = "1"
     {"run": run, "investigate": investigate, "regrade": regrade, "report": report}[a.cmd](a)

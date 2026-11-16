@@ -61,7 +61,8 @@
     "glm-5.3-flash",
     "deepseek-v4.1-flash",
     "mimo-v2.6-flash"
-   ]
+   ],
+   "effort": "medium"
   }
  },
  "models": {

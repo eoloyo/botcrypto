@@ -68,6 +68,9 @@ both invented an answer); `mistral-large-4`, `minimax-m3` and `minimax-m3.1-flas
 ## Writing a task for an agent
 
 - **Give it a test or a command that proves the result**, and check it yourself afterwards.
+- **Set the effort.** `agent.py` always passes one (`--effort`, default medium). The benchmark above ran at the
+  harness default, which for the main models behaves like "low": on a test question `deepseek-v4.1-flash` was wrong
+  at default and low, right at medium and above. `gemma4:31b` does not reason in this harness at any level.
 - **State a budget** ("at most 60 tool calls; write the report after about 45"). Without one, five models ran
   out of time or tokens with nothing written; with one, four of those five finished.
 - **Use literal absolute paths.** With a command allow-list, the permission checker rejects `$VAR`, `$(...)`

@@ -18,6 +18,9 @@ Guards: a run is stopped when it passes --timeout, --max-input-tokens or --max-t
 same tool call six times in a row, or when the session allowance has fallen by --max-cost-pct since
 it started. Every run keeps a transcript.
 
+Effort: every run sets a reasoning effort (--effort, default medium). Left to the harness default, the
+main models reason about as little as at "low" and get more wrong.
+
 Commands are checked before they run: with an allow-list, `$VAR`, `$(...)` and `&` are rejected.
 Tell the agent to use literal absolute paths and the Bash tool's run_in_background option.
 
@@ -35,12 +38,13 @@ SAFE_BASH = ["Bash(ls:*)", "Bash(cat:*)", "Bash(go test:*)", "Bash(go build:*)",
 
 
 def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeout=600,
-        max_input_tokens=4_000_000, max_turns=80, max_cost_pct=3.0, log=None):
+        max_input_tokens=4_000_000, max_turns=80, max_cost_pct=3.0, log=None, effort=None):
     """Run the agent. It is stopped when it exceeds the time limit, the total input-token budget, the turn
     limit, repeats one tool call six times in a row, or when the account's session allowance has dropped by more than max_cost_pct since it started
     (an agent that keeps re-sending a huge context can otherwise burn 10%+ of a session in minutes).
     The full transcript is kept in `log` (default: ~/.cache/ollama-cloud/transcripts/)."""
     model = model or A.ROLES["agent"]["models"][0]
+    effort = effort or A.ROLES["agent"].get("effort", "medium")   # never leave it to the harness default (see README)
     cfg = A.STATE / "claude-config"
     home = A.STATE / "claude-home"
     for d in (cfg, home, A.STATE / "transcripts"):
@@ -56,7 +60,8 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
                ANTHROPIC_BASE_URL=A.HOST, ANTHROPIC_API_KEY="",
                ANTHROPIC_AUTH_TOKEN=os.environ.get("OLLAMA_API_KEY", "proxy-injected"),
                ANTHROPIC_DEFAULT_HAIKU_MODEL=model, ANTHROPIC_DEFAULT_SONNET_MODEL=model, ANTHROPIC_DEFAULT_OPUS_MODEL=model)
-    cmd = ["claude", "-p", task, "--model", model, "--output-format", "stream-json", "--verbose", "--no-session-persistence",
+    cmd = ["claude", "-p", task, "--model", model, "--effort", effort, "--output-format", "stream-json", "--verbose",
+           "--no-session-persistence",
            "--permission-mode", "acceptEdits" if write else "default",
            "--tools", ",".join(tools), "--allowedTools", *allowed]
     st = {"usage": {}, "text": "", "result": None, "tools": 0, "last": None, "repeat": 0, "longest": ""}
@@ -119,7 +124,8 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
                 break
         proc.wait(); th.join(timeout=5)
     d = st["result"] or {}
-    r = {"model": model, "role": "agent", "secs": round(time.time() - t0, 1), "turns": len(st["usage"]), "tool_calls": st["tools"],
+    r = {"model": model, "role": "agent", "effort": effort, "secs": round(time.time() - t0, 1), "turns": len(st["usage"]),
+         "tool_calls": st["tools"],
          "in_tokens": spent(), "out_tokens": sum(u[1] for u in st["usage"].values()),
          "context_peak": max((u[0] for u in st["usage"].values()), default=0), "log": str(log)}
     def answer(final):
@@ -148,6 +154,8 @@ def main():
     p.add_argument("--write", action="store_true", help="let the agent create and edit files in the directory")
     p.add_argument("--read-only", action="store_true", help="no shell at all: Read/Glob/Grep only")
     p.add_argument("--allow", action="append", default=[], help='extra permitted command, e.g. "Bash(npm test:*)"')
+    p.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
+                   help="reasoning effort (default: the agent role's setting in models.json, medium)")
     p.add_argument("--timeout", type=int, default=600, help="seconds before the agent is stopped")
     p.add_argument("--max-input-tokens", type=int, default=4_000_000, help="stop after this many input tokens in total")
     p.add_argument("--max-turns", type=int, default=80)
@@ -157,9 +165,10 @@ def main():
     bal = A.balance()
     if bal and bal.get("session_pct") is not None and bal["session_pct"] < A.MIN_SESSION_PCT and not a.force:
         sys.exit(f"[agent] session allowance is at {bal['session_pct']}%; refusing below {A.MIN_SESSION_PCT}%. Use --force.")
-    r = run(a.task, a.dir, a.model, a.write, a.read_only, a.allow, a.timeout, a.max_input_tokens, a.max_turns, a.max_cost_pct)
+    r = run(a.task, a.dir, a.model, a.write, a.read_only, a.allow, a.timeout, a.max_input_tokens, a.max_turns, a.max_cost_pct,
+            effort=a.effort)
     print(r.get("content") or f"[error] {r.get('error', '')}")
-    print(f"[agent] {r['model']} status={r['status']} turns={r.get('turns')} {r['secs']}s in={r.get('in_tokens')} "
+    print(f"[agent] {r['model']} effort={r['effort']} status={r['status']} turns={r.get('turns')} {r['secs']}s in={r.get('in_tokens')} "
           f"out={r.get('out_tokens')} peak_context={r.get('context_peak')} {r.get('error') or ''}\n[agent] transcript: {r['log']}", file=sys.stderr)
     sys.exit(0 if r["status"] == 200 else 1)
 
