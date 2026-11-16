@@ -18,7 +18,7 @@ Guards: a run is stopped when it passes --timeout, --max-input-tokens or --max-t
 same tool call six times in a row, or when the session allowance has fallen by --max-cost-pct since
 it started. Every run keeps a transcript.
 
-Effort: every run sets a reasoning effort (--effort, default medium). Left to the harness default, the
+Effort: every run sets a reasoning effort (--effort, default high). Left to the harness default, the
 main models reason about as little as at "low" and get more wrong.
 
 Commands are checked before they run: with an allow-list, `$VAR`, `$(...)` and `&` are rejected.
@@ -44,7 +44,7 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     (an agent that keeps re-sending a huge context can otherwise burn 10%+ of a session in minutes).
     The full transcript is kept in `log` (default: ~/.cache/ollama-cloud/transcripts/)."""
     model = model or A.ROLES["agent"]["models"][0]
-    effort = effort or A.ROLES["agent"].get("effort", "medium")   # never leave it to the harness default (see README)
+    effort = effort or A.ROLES["agent"].get("effort", "high")   # never leave it to the harness default (see README)
     cfg = A.STATE / "claude-config"
     home = A.STATE / "claude-home"
     for d in (cfg, home, A.STATE / "transcripts"):
@@ -155,7 +155,7 @@ def main():
     p.add_argument("--read-only", action="store_true", help="no shell at all: Read/Glob/Grep only")
     p.add_argument("--allow", action="append", default=[], help='extra permitted command, e.g. "Bash(npm test:*)"')
     p.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
-                   help="reasoning effort (default: the agent role's setting in models.json, medium)")
+                   help="reasoning effort (default: the agent role's setting in models.json, high)")
     p.add_argument("--timeout", type=int, default=600, help="seconds before the agent is stopped")
     p.add_argument("--max-input-tokens", type=int, default=4_000_000, help="stop after this many input tokens in total")
     p.add_argument("--max-turns", type=int, default=80)

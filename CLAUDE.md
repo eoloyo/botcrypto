@@ -16,8 +16,8 @@ Rules:
 - Check `tools/ollama/ask.py --balance` before a batch of work. Allowance is shared across all sessions.
 - At most 3 calls run at once on the account. Do not fan out wider; the tools enforce 2 by default.
 - Never call the API without streaming, and never retry a 502: the first request may still be running and billed.
-- Always run agents with an explicit effort level: `agent.py --effort medium` is the default; use `high` for hard
-  investigations. Never rely on the harness default (it reasons too little).
+- Always run agents with an explicit effort level: `agent.py` defaults to `--effort high` (measured slightly better
+  than medium on long reviews at no extra cost). Never rely on the harness default (it reasons too little).
 - Give every agent task a proof (a test or command), a budget in tool calls, and literal absolute paths
   (`$VAR`, `$(...)` and `&` are rejected by the permission checker). Keep the guards on (`--max-cost-pct`).
 - Do not use the Kimi K3 models: same results as the cheap models here at 10-30x the price.

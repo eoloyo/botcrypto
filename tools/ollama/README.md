@@ -68,7 +68,7 @@ both invented an answer); `mistral-large-4`, `minimax-m3` and `minimax-m3.1-flas
 ## Writing a task for an agent
 
 - **Give it a test or a command that proves the result**, and check it yourself afterwards.
-- **Set the effort.** `agent.py` always passes one (`--effort`, default medium). The benchmark above ran at the
+- **Set the effort.** `agent.py` always passes one (`--effort`, default high). The benchmark above ran at the
   harness default, which for the main models behaves like "low": on a test question `deepseek-v4.1-flash` was wrong
   at default and low, right at medium and above. `gemma4:31b` does not reason in this harness at any level.
 - **State a budget** ("at most 60 tool calls; write the report after about 45"). Without one, five models ran
@@ -130,6 +130,37 @@ agents work too. Same two tasks (implement, debug), one run each:
 | Cline CLI | pass, 17/17, 0.24% | pass, 17/17, 0.09% | Cheapest. Its Ollama provider only reaches a local Ollama; use the OpenAI-compatible provider with `https://ollama.com/v1` |
 
 Only Claude Code is wired into these tools; the other three were configured by hand for this comparison.
+
+### Do models behave differently across harnesses?
+
+The long review (same task, report written to a file, same two judges), three models, two runs each, at
+medium and at high effort: 48 runs, all of which produced a report. Scores out of 10, run 1 / run 2.
+
+| Model, effort | Claude Code | Codex | OpenCode | Cline |
+|---|---|---|---|---|
+| `glm-5.3-flash`, medium | 9 / 4 | 4 / 4 | 7 / 5.5 | 7 / 4 |
+| `glm-5.3-flash`, high | 6 / 7 | 7 / 4 | 9 / 4 | 7 / 7 |
+| `deepseek-v4.1-flash`, medium | 7 / 4 | 7 / 9 | 7 / 4 | 9 / 7 |
+| `deepseek-v4.1-flash`, high | 9 / 9 | 7 / 6 | 4.5 / 9 | 5 / 7.5 |
+| `mimo-v2.6-flash`, medium | 7 / 4 | 2.5 / 4 | 4 / 4 | 7 / 7 |
+| `mimo-v2.6-flash`, high | 4.5 / 4 | 4 / 4 | 4.5 / 8 | 5 / 7 |
+
+| Harness (12 runs each) | Mean score | Spread (sd) | Found the nonce defect | Mean time | Mean tool calls |
+|---|---|---|---|---|---|
+| Cline | 6.6 | 1.3 | 9 of 12 | 244 s | 29 |
+| Claude Code | 6.2 | 2.0 | 6 of 12 | 255 s | 52 |
+| OpenCode | 5.9 | 1.9 | 6 of 12 | 314 s | 23 |
+| Codex | 5.2 | 1.8 | 4 of 12 | 165 s | 26 |
+
+- **The run-to-run swing is bigger than the harness effect.** The same model in the same harness scored 9 and 4.
+  A gap of about one point between harness means, with 12 runs each, is suggestive and no more.
+- **Cline was the steadiest and Codex the weakest.** In Codex the models stopped soonest (fastest runs, fewest
+  findings); `gpt-oss:120b` does not work in Codex at all.
+- **The harnesses fail differently.** OpenCode ends the whole run when the model touches a directory outside the
+  project (set `"external_directory": "allow"`); Claude Code hands the refusal back to the model. Cline lost a run to
+  a dropped connection and did not retry. Claude Code uses about twice the tool calls of the others.
+- **High effort helped a little: 5.8 to 6.2 on average,** with every model slightly up, which is within the noise.
+  No extra cost showed up: about 0.7–1.1% of a session per long run at either level. The agent role now defaults to high.
 
 ## Caveats
 

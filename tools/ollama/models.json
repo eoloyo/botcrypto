@@ -62,7 +62,7 @@
     "deepseek-v4.1-flash",
     "mimo-v2.6-flash"
    ],
-   "effort": "medium"
+   "effort": "high"
   }
  },
  "models": {
