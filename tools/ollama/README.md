@@ -1,22 +1,20 @@
 # Ollama cloud models as helpers
 
 Claude Code (the lead) hands work to cheaper Ollama cloud models and checks what comes back.
-Everything here was measured on 2026-11-15; `bench.py` re-runs the comparison when the model list changes.
+Measured on 2026-11-15/16 across all 23 chat models on the account; `bench.py` re-runs it when the model list changes.
 
 ## The three ways to delegate
 
 | Tool | What the model gets | Use it for | Typical cost* |
 |---|---|---|---|
-| `agent.py` | Claude Code's harness: reads files, runs commands, iterates | Coding, debugging, reviews that need experiments | 0.01–0.3% per coding task; 1.4% for a 5-minute investigative review |
-| `ask.py` (one-shot) | One message: briefing + task + attached files. No tools. | Second opinions, drafts, explanations, first-pass review | 0.01–0.5% |
+| `agent.py` | Claude Code's harness: reads files, runs commands, iterates | Coding, debugging, reviews that need experiments | 0.01–0.3% per short task; 0.1–2% per long investigation on the cheap models |
+| `ask.py` (one-shot) | One message: briefing + task + attached files. No tools. | Second opinions, drafts, explanations | 0.01–0.5% |
 | `ask.py -r bulk` | The same, with very large input | Reading a whole repo or log and answering from it | 0.4–0.7% per 225k tokens read |
 
 \* Share of one session allowance on this account's plan.
 
-**The harness matters more than the model.** On the same Go task, 17 of 20 models failed one-shot,
-5 of 16 still failed with thinking on, and 11 of 11 passed as agents (4–19 s each), including the two
-smallest. On the review task no one-shot model found the subtle defects; `deepseek-v4.1-flash` as an
-agent found and confirmed all five, plus one more.
+**The harness matters more than the model.** One-shot, 17 of 20 models failed a Go task; as agents, 22 of 23
+passed it and fixed a buggy parser to 17/17 hidden tests. Give a model tools and a test, and almost any of them works.
 
 ```bash
 tools/ollama/setup.sh                                   # once per fresh container
@@ -38,6 +36,21 @@ tools/ollama/ask.py --list           # models, cost class, context
 API key: in Claude cloud sessions on this environment the key is a saved network secret for
 `ollama.com` and the proxy adds it to requests. Anywhere else, `export OLLAMA_API_KEY=<key>`.
 
+## Which model for what
+
+| Job | Use | Why |
+|---|---|---|
+| Long or investigative agent work | `glm-5.3-flash` | Most consistent strong long reviews among cheap models (7 and 9 out of 10); honest; about 1–2% per long run |
+| One-shot review, research, code; second agent choice | `deepseek-v4.1-flash` | 8/8 code reasoning, honest, finished every long run (10, 6, 6, 7); about 0.3–0.8% per long run |
+| Bulk reading, cheap all-round work | `mimo-v2.6-flash` | 4/4 on the reading test at the lowest price; long reviews vary (7, 7, 4) |
+| Short, test-verified coding tasks | `gpt-oss:120b` or `gemma4:31b` | Fastest and cheapest (both tasks in 15–70 s); both invent answers when they lack facts, so never for research |
+| Quick first-pass investigation | `inkling-2-small` | Finishes a long review in 45–85 s, honest, medium depth (6, 4) |
+| Second opinion when it matters | `glm-5.3` | Fully consistent (7, 7), honest, 8/8; about 5x the price of the flash model for the same result |
+
+Not worth using here: `kimi-k3` and `kimi-k3.1-pro` (same scores as the cheap models at 10–30x the price, and
+both invented an answer); `mistral-large-4`, `minimax-m3` and `minimax-m3.1-flash` (too slow for long agent work);
+`gpt-oss:20b` (weakest reasoning). Every model's verdict is in `models.json` under `best_use`.
+
 ## Limits (measured)
 
 | Limit | What happens | What the tools do |
@@ -45,61 +58,86 @@ API key: in Claude cloud sessions on this environment the key is a saved network
 | **3 requests at once** (plan limit; Max/Team plans get 10) | Extra requests queue. | A cross-process slot limiter (`OLLAMA_MAX_PARALLEL`, default 2). An agent holds one slot. |
 | **30 s to the first byte** | A call that has sent nothing after 30 s (a non-streamed long answer, or a queued call) gets `502 upstream request failed`. The response has none of Ollama's headers, so it most likely comes from the Claude cloud session's own proxy. **The request can keep running at Ollama and is billed.** | Always stream. Never retry a 502; fall back to the role's next model. |
 | **Allowance** (this account: a session window and a weekly window, in %) | Every request counts, including ones that failed on our side. Charges appear ~15 s after a call ends. | `--balance`; refuses to start below `OLLAMA_MIN_SESSION_PCT` (10%). |
-| **Thinking** | Needed for good one-shot answers, but an open-ended task can spend ~20,000 tokens thinking first. Thinking counts against the output cap: with too small a cap the answer is empty. Only some models honour a "low" level; a few cannot turn thinking off. | On per role, with a 32,000-token cap. `--no-think` for cheap, shallow calls. |
-| **Price spread** | The same thinking review cost 0.08% on `mimo-v2.6-flash`, 0.27% on `deepseek-v4.1-flash`, and 2.2–5% on `kimi-k3.1-pro`. | Roles use $ and $$ models; the Kimi K3 models are not in any role. |
+| **Runaway agents** | An agent that loops re-sends its whole context every turn. One cheap model spent 13% of a session in 10 minutes and produced nothing. | `agent.py` stops a run that repeats one tool call 6 times, passes its token, turn or time budget, or costs more than `--max-cost-pct`. It keeps a transcript of every run. |
+| **Thinking** (one-shot) | Needed for good one-shot answers, but an open-ended task can spend ~20,000 tokens thinking first, and thinking counts against the output cap. Only some models honour a "low" level; a few cannot turn thinking off. | On per role, with a 32,000-token cap. `--no-think` for cheap, shallow calls. |
+| **Price spread** | The same test suite cost 0.17% on `gemma4:31b` and 11.9% on `kimi-k3`. | Roles use the cheap models. |
 | **Context** | 131k tokens (gpt-oss), 262k (gemma4, kimi-k2.x, nemotron), ~1M for most others. A 226k-token prompt was read correctly in 9–12 s. | `ask.py` refuses input that will not fit. |
-| **Speed** | 35–530 tokens/s, typically 120–230; first token in under 1 s (5–6 s for a 226k-token prompt). | |
-| **Aborting** | Closing a stream cancels it; the slot frees ~10 s later. | `--timeout`, then a 10 s pause. |
+| **Speed** | 35–530 tokens/s. The same model can be 10x slower from one run to the next. | Timeouts; give long tasks a budget. |
 | **Structured output** | Not supported by cloud models (Ollama docs). | Ask for JSON in the prompt and parse leniently. |
 
-## What to delegate
+## Writing a task for an agent
 
-- **Yes, as an agent:** self-contained coding with a test to pass; reproducing a bug; a review where
-  claims can be confirmed by running something.
-- **Yes, one-shot:** reading a lot and answering from it (`-r bulk`); a second opinion on a diff;
-  drafts and boilerplate; explanations.
-- **No:** anything that needs credentials or pushes; decisions about what to build; work where checking
-  the answer costs as much as doing it.
-- **Always verify.** Run the tests and read the diff. One-shot answers contain confident errors
-  (wrong line numbers, bugs that are not bugs), and 5 of 20 models invented an answer to a question
-  about files they had not been shown.
+- **Give it a test or a command that proves the result**, and check it yourself afterwards.
+- **State a budget** ("at most 60 tool calls; write the report after about 45"). Without one, five models ran
+  out of time or tokens with nothing written; with one, four of those five finished.
+- **Use literal absolute paths.** With a command allow-list, the permission checker rejects `$VAR`, `$(...)`
+  and a trailing `&`. Tell the agent to start servers with the Bash tool's run_in_background option.
+- **Read the report, not the last message.** Agents often add a closing remark after the report; `agent.py` keeps both.
+- **Always verify.** Nine of 23 models invented an answer about files they had not been shown.
 
 ## Results
 
-Scores: code = `go test` on the model's function; review = points out of 10 against five defects
-verified by running the shim (`bench/review_rubric.md`), judged by two models and spot-checked;
-trap = a question about repo files the model was not shown. Times and costs in brackets.
+Short suite: implement and debug are agent tasks (debug is graded by 17 hidden tests); code reasoning is predicting
+the output of 8 executed programs; reading is 4 questions over ~80k tokens of this repo, one with no answer in it;
+honest means it admitted not having been shown some files. The long review is an agent investigating
+`ejbca-shim/main.go` by experiment, scored out of 10 against five defects verified by running the shim
+(`bench/review_rubric.md`), by two judge models with spot checks; each model ran it twice. "no report" means it
+ran out of time (10 minutes) or was stopped by a guard. Suite cost is the share of one session allowance for the
+whole short suite.
 
-| Model | Cost | Code: one-shot | Code: one-shot + thinking | Code: as agent | Review: one-shot | Review: + thinking (10k cap) | Trap |
-|---|---|---|---|---|---|---|---|
-| `beam` | $ | pass (6s) | – | – | 0.5 (14s) | – | – (1s) |
-| `gemma4:31b` | $ | fail (4s) | fail (9s, 0.01%) | pass (4s, 0.02%) | 3.0 (3s) | – | honest (1s) |
-| `gpt-oss:120b` | $ | fail (2s) | pass (4s, 0.01%) | pass (16s, 0.02%) | 4.0 (5s) | 2.5 (8s, 0.02%) | invented (3s) |
-| `gpt-oss:20b` | $ | fail (8s) | fail (10s, 0.0%) | pass (12s, 0.01%) | 3.0 (10s) | – | invented (4s) |
-| `mimo-v2.6-flash` | $ | fail (4s) | pass (13s, 0.01%) | pass (12s, 0.01%) | 0.0 (1s) | no answer (cap) (48s, 0.05%) | honest (1s) |
-| `minimax-m3.1-flash` | $ | fail (15s) | no answer (134s, 0.04%) | – | 4.0 (22s) | – | honest (8s) |
-| `nemotron-3-ultra` | $ | fail (11s) | pass (63s, 0.07%) | – | 4.0 (13s) | 3.0 (68s, 0.03%) | invented (27s) |
-| `deepseek-v4.1-flash` | $$ | fail (2s) | pass (6s, 0.03%) | pass (9s, 0.05%) | 4.0 (9s) | no answer (cap) (52s, 0.13%) | honest (7s) |
-| `glm-5.2` | $$ | fail (5s) | fail (4s, 0.04%) | pass (12s, 0.2%) | 4.0 (5s) | – | invented (2s) |
-| `glm-5.3-flash` | $$ | fail (2s) | pass (32s, 0.07%) | pass (4s, 0.03%) | 4.0 (20s) | no answer (cap) (49s, 0.11%) | honest (2s) |
-| `inkling-2-small` | $$ | fail (4s) | – | – | 4.0 (24s) | – | honest (4s) |
-| `kimi-k2.7-code` | $$ | fail (8s) | pass (32s, 0.11%) | pass (19s, 0.08%) | 3.5 (8s) | no answer (cap) (108s, 0.27%) | honest (2s) |
-| `mimo-v2.6-pro` | $$ | fail (4s) | pass (12s, 0.03%) | pass (13s, 0.11%) | 4.0 (8s) | no answer (cap) (73s, 0.15%) | honest (2s) |
-| `minimax-m3` | $$ | fail (3s) | pass (28s, 0.08%) | – | 4.0 (7s) | no answer (cap) (68s, 0.19%) | honest (1s) |
-| `muse-spark-open` | $$ | pass (3s) | – | – | 3.0 (9s) | – | honest (4s) |
-| `deepseek-v4-pro:0813` | $$$ | fail (2s) | pass (12s, 0.1%) | pass (16s, 0.29%) | 4.0 (15s) | 3.5 (58s, 0.5%) | honest (2s) |
-| `glm-5.3` | $$$ | fail (3s) | no answer (41s, 0.46%) | pass (9s, 0.22%) | 4.0 (20s) | no answer (cap) (54s, 0.52%) | invented (2s) |
-| `mistral-large-4` | $$$ | pass (20s) | – | – | 4.0 (115s) | – | honest (16s) |
-| `kimi-k3` | $$$$ | fail (8s) | pass (26s, 0.65%) | – | 4.0 (22s) | – | honest (33s) |
-| `kimi-k3.1-pro` | $$$$ | fail (3s) | pass (46s, 0.56%) | – | 1.5 (51s) | no answer (cap) (226s, 2.23%) | honest (2s) |
+| Model | Suite cost | Code reasoning | Reads repo | Honest | Short agent tasks (time) | Long review, run 1 / run 2 | Long review time | Tokens per long run |
+|---|---|---|---|---|---|---|---|---|
+| `glm-5.3-flash` | 0.51% | 7/8 | 4.0/4 | yes | pass (6s + 34s) | 7.0 / 9.0 | 182s / 280s | 1.2M / 2.5M |
+| `glm-5.3` | 2.73% | 8/8 | 4.0/4 | yes | pass (10s + 36s) | 7.0 / 7.0 | 200s / 242s | 1.0M / 0.9M |
+| `deepseek-v4-pro:0813` | 3.29% | 8/8 | 4.0/4 | no | pass (12s + 49s) | 7.0 / 7.0 | 254s / 220s | 1.0M / 0.7M |
+| `kimi-k3.1-pro` | 7.87% | 8/8 | 4.0/4 | no | pass (15s + 228s) | 7.0 / 7.0 | 217s / 264s | 0.5M / 0.5M |
+| `kimi-k3` | 11.89% | 8/8 | 4.0/4 | no | pass (9s + 29s) | 7.0 / 7.0 | 168s / 217s | 0.4M / 0.6M |
+| `mimo-v2.6-pro` | 1.12% | 7/8 | 4.0/4 | yes | pass (8s + 93s) | 4.5 / 9.0 | 145s / 224s | 0.6M / 0.8M |
+| `deepseek-v4.1-flash` | 0.69% | 8/8 | 4.0/4 | yes | pass (6s + 69s) | 6.0 / 7.0 | 253s / 266s | 0.6M / 0.8M |
+| `mimo-v2.6-flash` | 0.26% | 7/8 | 4.0/4 | yes | pass (15s + 50s) | 7.0 / 4.0 | 134s / 112s | 0.5M / 0.6M |
+| `nemotron-3-ultra` | 0.66% | 8/8 | 3.0/4 | no | pass (40s + 300s) | 4.0 / 7.0 | 407s / 497s | 1.1M / 1.3M |
+| `glm-5.2` | 1.79% | 7/8 | 4.0/4 | yes | pass (7s + 44s) | 7.0 / 4.0 | 135s / 153s | 0.6M / 0.7M |
+| `inkling-2-small` | 0.71% | 8/8 | 4.0/4 | yes | pass (14s + 35s) | 6.0 / 4.0 | 45s / 71s | 0.5M / 0.9M |
+| `muse-spark-open` | 1.44% | 8/8 | 4.0/4 | yes | pass (16s + 18s) | 4.0 / 4.5 | 209s / 133s | 2.2M / 1.6M |
+| `gpt-oss:120b` | 0.25% | 7/8 | 3.0/4 | no | pass (12s + 56s) | 4.0 / 4.0 | 86s / 186s | 0.9M / 1.3M |
+| `kimi-k2.7-code` | 1.58% | 7/8 | 4.0/4 | no | pass (9s + 140s) | 4.0 / 4.0 | 199s / 215s | 0.9M / 0.6M |
+| `nemotron-3-super` | 0.34% | 6/8 | 3.0/4 | yes | pass (15s + 144s) | 4.5 / 1.0 | 115s / 150s | 0.9M / 1.2M |
+| `beam` | 0.18% | 8/8 | 4.0/4 | yes | pass (15s + 82s) | 4.0 / no report | 319s / 600s | 1.3M / 0.7M |
+| `gpt-oss:20b` | 0.29% | 4/8 | 3.8/4 | no | pass (30s + 209s) | 4.0 / no report | 243s / 600s | 1.5M / 0.5M |
+| `kimi-k2.6` | 2.57% | 7/8 | 4.0/4 | no | pass (23s + 156s) | 4.0 / no report | 339s / 601s | 1.1M / 0.6M |
+| `gemma4:31b` | 0.17% | 8/8 | 4.0/4 | no | pass (6s + 9s) | 3.0 / no report | 34s / 24s | 0.4M / 0.4M |
+| `minimax-m3.1-flash` | 0.2% | 7/8 | 4.0/4 | yes | pass (27s + 103s) | no report / no report | 601s / 600s | 0.3M / 1.5M |
+| `mistral-large-4` | 1.34% | 0/8 | 4.0/4 | yes | debug 8/17 (25s + 300s) | no report / no report | 600s / 601s | 0.8M / 0.1M |
+| `minimax-m3` | 2.06% | 6/8 | 4.0/4 | yes | pass (87s + 269s) | no report / no report | 600s / 600s | 1.0M / 1.4M |
+| `deepseek-v4.1-flash:1017` | 0.45% | 7/8 | 4.0/4 | yes | pass (7s + 53s) | – | – | – |
 
-Review with a harness (`agent.py`, allowed to build and probe the shim):
-`deepseek-v4.1-flash` 10/10 plus one new defect, 57 turns, 5 min, 1.37%; `gpt-oss:120b` timed out after 9 min.
-With a 30,000-token cap, one-shot thinking reviews scored 4.0 (`deepseek-v4.1-flash`, 0.27%) and 2.5 (`mimo-v2.6-flash`, 0.08%).
+Long-review cost: 0.1–2% per run for the 11 cheapest models (measured one at a time); about 4% per run on average
+for the 11 pricier ones (measured only as a group).
 
-Caveats: one run per cell, one repository, three tasks. Treat small differences as noise.
+## Other harnesses
+
+Ollama cloud serves the Anthropic, OpenAI-responses and OpenAI-chat APIs at `https://ollama.com`, so other coding
+agents work too. Same two tasks (implement, debug), one run each:
+
+| Harness | `deepseek-v4.1-flash` | `gpt-oss:120b` | Notes |
+|---|---|---|---|
+| Claude Code (`agent.py`) | pass, 17/17, 0.31% | pass, 17/17, 0.15% | Per-command allow-list; largest standing prompt (~25k tokens per request) |
+| Codex CLI | pass, 17/17, 0.34% | failed both | Model-sensitive: `gpt-oss:120b` misuses its tool format and the API errors out. OS sandbox (needs bubblewrap; home directory must not be under `/tmp`) |
+| OpenCode | pass, 17/17, 0.40% | pass, 17/17, 0.17% | Runs without reasoning unless the model is declared `reasoning: true` and run with `--variant high` (11/17 before that) |
+| Cline CLI | pass, 17/17, 0.24% | pass, 17/17, 0.09% | Cheapest. Its Ollama provider only reaches a local Ollama; use the OpenAI-compatible provider with `https://ollama.com/v1` |
+
+Only Claude Code is wired into these tools; the other three were configured by hand for this comparison.
+
+## Caveats
+
+- One repository, a handful of tasks, two runs of the long review. Differences of 2–3 points between models are noise:
+  the same model scored 10 and 6 on the same task.
+- The judges are models. They were spot-checked and are slightly lenient.
+- Hosted models change speed and availability from hour to hour: two were down on the first day and up on the second.
 
 ```bash
-tools/ollama/bench.py run    --out /tmp/bench            # all chat models; costs allowance (see --cap)
-tools/ollama/bench.py report --out /tmp/bench
+tools/ollama/bench.py run         --out /tmp/bench                       # short suite, all chat models
+tools/ollama/bench.py investigate --out /tmp/bench --models a,b --parallel 3 [--name investigate2]
+tools/ollama/bench.py regrade     --out /tmp/bench
+tools/ollama/bench.py report      --out /tmp/bench [--update-models]
 ```

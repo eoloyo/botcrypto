@@ -1,5 +1,5 @@
 {
- "_comment": "Measured 2026-11-15 (see README.md). cost = share of one session allowance for a 4.6k-token-in / ~170-token-out call with thinking off: $ <=0.01%, $$ <=0.05%, $$$ <=0.1%, $$$$ more. Thinking multiplies it 5-25x. bench = results of bench.py (code: 1 pass / 0 fail; review: score out of 10; trap: 1 honest / 0 invented).",
+ "_comment": "Measured 2026-11-15/16 with bench.py (see README.md). cost = share of one session allowance for a 4.6k-token-in / ~170-token-out call with thinking off: $ <=0.01%, 14242 <=0.05%, 14242$ <=0.1%, 1424214242 more. bench = scores from bench.py (implement/honesty: 1 or 0; debug x/17 hidden tests; comprehend x/8; read out of 4; investigate out of 10, two runs). best_use = the conclusion drawn from those results.",
  "roles": {
   "fast": {
    "models": [
@@ -12,17 +12,17 @@
   },
   "general": {
    "models": [
-    "gpt-oss:120b",
-    "deepseek-v4.1-flash"
+    "deepseek-v4.1-flash",
+    "glm-5.3-flash"
    ],
    "think": true,
    "max_tokens": 16000
   },
   "code": {
    "models": [
-    "gpt-oss:120b",
     "deepseek-v4.1-flash",
-    "mimo-v2.6-pro"
+    "glm-5.3-flash",
+    "gpt-oss:120b"
    ],
    "think": true,
    "max_tokens": 16000,
@@ -31,7 +31,7 @@
   "review": {
    "models": [
     "deepseek-v4.1-flash",
-    "deepseek-v4-pro:0813"
+    "glm-5.3-flash"
    ],
    "think": true,
    "max_tokens": 32000,
@@ -40,7 +40,7 @@
   "research": {
    "models": [
     "deepseek-v4.1-flash",
-    "deepseek-v4-pro:0813"
+    "glm-5.3-flash"
    ],
    "think": true,
    "max_tokens": 16000,
@@ -49,6 +49,7 @@
   "bulk": {
    "models": [
     "mimo-v2.6-flash",
+    "glm-5.3-flash",
     "deepseek-v4.1-flash"
    ],
    "think": false,
@@ -57,9 +58,9 @@
   },
   "agent": {
    "models": [
-    "deepseek-v4.1-flash",
     "glm-5.3-flash",
-    "gpt-oss:120b"
+    "deepseek-v4.1-flash",
+    "mimo-v2.6-flash"
    ]
   }
  },
@@ -73,16 +74,27 @@
    "think_off_works": false,
    "notes": "thinks even with thinking off",
    "bench": {
-    "code_nothink": 1,
-    "review_nothink": 0.5,
-    "trap_nothink": null
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "4.0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 0.18
+   },
+   "best_use": "cheap, honest, 8/8 code reasoning; slow and variable on long tasks (4, no report)",
+   "long_review_cost_pct": [
+    0.37,
+    0.21
+   ]
   },
   "clef:27b": {
    "ctx": 65536,
    "cost": "?",
    "chat": false,
-   "notes": "decision model (yes/no, choice, scoring via /v1/systemone); not a chat model"
+   "notes": "decision model (yes/no, choice, scoring via /v1/systemone); not a chat model",
+   "best_use": "decision model (yes/no, choice, scoring through /v1/systemone), not a chat model; not benchmarked"
   },
   "deepseek-v4-pro:0813": {
    "ctx": 1048576,
@@ -93,13 +105,16 @@
    "think_off_works": true,
    "notes": "",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": 3.5,
-    "trap_nothink": 1,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 0,
+    "investigate": "7.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 3.29
+   },
+   "best_use": "consistent (7, 7; 8/8) but about 5x the price of deepseek-v4.1-flash and it invented an answer: second opinion only"
   },
   "deepseek-v4.1-flash": {
    "ctx": 1048576,
@@ -110,14 +125,20 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1,
-    "code_agent": 1,
-    "review_agent": 10
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "6.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 0.69
+   },
+   "best_use": "DEFAULT for one-shot review/research/code and second agent choice: 8/8 code reasoning, honest, finished every long run (10, 6, 6, 7)",
+   "long_review_cost_pct": [
+    0.32,
+    0.43
+   ]
   },
   "deepseek-v4.1-flash:1017": {
    "ctx": 1048576,
@@ -126,7 +147,16 @@
    "tok_s": 165,
    "ttft_s": 0.33,
    "think_off_works": true,
-   "notes": "pinned snapshot of deepseek-v4.1-flash; vision"
+   "notes": "pinned snapshot of deepseek-v4.1-flash; vision",
+   "bench": {
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 1,
+    "suite_cost_pct": 0.45
+   },
+   "best_use": "pinned snapshot of deepseek-v4.1-flash; same behaviour on the short suite"
   },
   "gemma4:31b": {
    "ctx": 262144,
@@ -137,12 +167,20 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 0,
-    "review_nothink": 3.0,
-    "trap_nothink": 1,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 0,
+    "investigate": "3.0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 0.17
+   },
+   "best_use": "fastest short coding agent (15 s for both tasks), 8/8 code reasoning; loops or stops early on long tasks; invents answers: only for short, test-verified tasks",
+   "long_review_cost_pct": [
+    0.35,
+    0.38
+   ]
   },
   "glm-5.2": {
    "ctx": 1048576,
@@ -153,12 +191,16 @@
    "think_off_works": true,
    "notes": "",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 0,
-    "review_nothink": 4.0,
-    "trap_nothink": 0,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "7.0/10",
+    "investigate2": "4.0/10",
+    "suite_cost_pct": 1.79
+   },
+   "best_use": "older GLM: fine on short tasks, variable on long (7, 4); glm-5.3-flash is cheaper and better"
   },
   "glm-5.3": {
    "ctx": 1048576,
@@ -169,13 +211,16 @@
    "think_off_works": true,
    "notes": "",
    "bench": {
-    "code_nothink": 0,
-    "code_think": "no answer (cap)",
-    "review_nothink": 4.0,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 0,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "7.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 2.73
+   },
+   "best_use": "very consistent (7, 7; 8/8; honest) but about 5x the price of glm-5.3-flash for the same result: second opinion only"
   },
   "glm-5.3-flash": {
    "ctx": 1048576,
@@ -186,13 +231,20 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "7.0/10",
+    "investigate2": "9.0/10",
+    "suite_cost_pct": 0.51
+   },
+   "best_use": "DEFAULT AGENT for long or investigative work: most consistent strong long-review scores among cheap models (7, 9); honest; reads large input well",
+   "long_review_cost_pct": [
+    1.01,
+    2.08
+   ]
   },
   "gpt-oss:120b": {
    "ctx": 131072,
@@ -203,14 +255,20 @@
    "think_off_works": true,
    "notes": "",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": 2.5,
-    "trap_nothink": 0,
-    "code_agent": 1,
-    "review_agent": "timed out (540 s)"
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 3.0,
+    "honesty": 0,
+    "investigate": "4.0/10",
+    "investigate2": "4.0/10",
+    "suite_cost_pct": 0.25
+   },
+   "best_use": "fast, cheap short agent tasks and quick answers; consistent but shallow on long reviews (4, 4); invents answers when it lacks the facts, so not for research",
+   "long_review_cost_pct": [
+    0.21,
+    0.3
+   ]
   },
   "gpt-oss:20b": {
    "ctx": 131072,
@@ -221,12 +279,20 @@
    "think_off_works": true,
    "notes": "",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 0,
-    "review_nothink": 3.0,
-    "trap_nothink": 0,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "4/8",
+    "read": 3.8,
+    "honesty": 0,
+    "investigate": "4.0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 0.29
+   },
+   "best_use": "smallest model: weakest code reasoning (4/8), slow, unreliable on long tasks; only for trivial one-shot answers",
+   "long_review_cost_pct": [
+    0.55,
+    0.17
+   ]
   },
   "inkling-2-small": {
    "ctx": 1048576,
@@ -237,15 +303,36 @@
    "think_off_works": false,
    "notes": "thinks even with thinking off; vision",
    "bench": {
-    "code_nothink": 0,
-    "review_nothink": 4.0,
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "6.0/10",
+    "investigate2": "4.0/10",
+    "suite_cost_pct": 0.71
+   },
+   "best_use": "fastest long-task finisher (45-85 s), honest, 8/8 code reasoning; medium depth (6, 4): quick first-pass investigations; cannot turn thinking off",
+   "long_review_cost_pct": [
+    0.37,
+    0.67
+   ]
   },
   "kimi-k2.6": {
    "ctx": 262144,
    "cost": "?",
-   "notes": "timed out (502) when probed; do not use"
+   "notes": "timed out (502) when probed; do not use",
+   "bench": {
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 0,
+    "investigate": "4.0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 2.57
+   },
+   "best_use": "older Kimi: passes short tasks, slow on long ones (4, no report); was unavailable for part of the testing"
   },
   "kimi-k2.7-code": {
    "ctx": 262144,
@@ -256,13 +343,16 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 3.5,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 0,
+    "investigate": "4.0/10",
+    "investigate2": "4.0/10",
+    "suite_cost_pct": 1.58
+   },
+   "best_use": "passes short coding tasks; long reviews stay at the easy findings (4, 4); invented an answer; nothing it does better than cheaper models"
   },
   "kimi-k3": {
    "ctx": 1048576,
@@ -273,11 +363,16 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 0,
+    "investigate": "7.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 11.89
+   },
+   "best_use": "consistent (7, 7; 8/8), the most expensive model (suite 11.9%), no better result here; invented an answer: not worth it for this work"
   },
   "kimi-k3.1-pro": {
    "ctx": 1048576,
@@ -288,12 +383,16 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 1.5,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 0,
+    "investigate": "7.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 7.87
+   },
+   "best_use": "consistent (7, 7; 8/8) at 10-30x the price of the cheap models with no better result here; invented an answer: not worth it for this work"
   },
   "mimo-v2.6-flash": {
    "ctx": 1048576,
@@ -304,13 +403,20 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 0.0,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "7.0/10",
+    "investigate2": "4.0/10",
+    "suite_cost_pct": 0.26
+   },
+   "best_use": "DEFAULT for bulk reading and cheap all-round work: 4/4 reading at the lowest price; long reviews vary (7, 7, 4)",
+   "long_review_cost_pct": [
+    0.11,
+    0.15
+   ]
   },
   "mimo-v2.6-pro": {
    "ctx": 1048576,
@@ -321,13 +427,16 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1,
-    "code_agent": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "4.5/10",
+    "investigate2": "9.0/10",
+    "suite_cost_pct": 1.12
+   },
+   "best_use": "capable (best long review 9) but inconsistent (4.5); no clear gain over glm-5.3-flash at about twice the price"
   },
   "minimax-m3": {
    "ctx": 512000,
@@ -338,12 +447,16 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": "no answer (cap)",
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "6/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 2.06
+   },
+   "best_use": "slow on every task and no report in 10 minutes on long reviews (twice): avoid for agent work"
   },
   "minimax-m3.1-flash": {
    "ctx": 1000000,
@@ -354,11 +467,20 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 0,
-    "code_think": "no answer (cap)",
-    "review_nothink": 4.0,
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "7/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 0.2
+   },
+   "best_use": "passes short tasks cheaply but too slow for long agent work here (no report in 10 minutes, twice); one earlier 9/10 run shows it is capable when fast",
+   "long_review_cost_pct": [
+    0.06,
+    0.28
+   ]
   },
   "mistral-large-4": {
    "ctx": 1048576,
@@ -369,10 +491,16 @@
    "think_off_works": false,
    "notes": "thinks even with thinking off; slow to first token; vision",
    "bench": {
-    "code_nothink": 1,
-    "review_nothink": 4.0,
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "8/17",
+    "comprehend": "0/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "0/10",
+    "investigate2": "0/10",
+    "suite_cost_pct": 1.34
+   },
+   "best_use": "too slow for agent work: timed out on the debugging task, the code-reasoning test and both long reviews"
   },
   "muse-spark-open": {
    "ctx": 1048576,
@@ -383,15 +511,36 @@
    "think_off_works": true,
    "notes": "vision",
    "bench": {
-    "code_nothink": 1,
-    "review_nothink": 3.0,
-    "trap_nothink": 1
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 4.0,
+    "honesty": 1,
+    "investigate": "4.0/10",
+    "investigate2": "4.5/10",
+    "suite_cost_pct": 1.44
+   },
+   "best_use": "8/8 code reasoning and honest, but long reviews stay at the easy findings (4, 4.5) while using the most tokens"
   },
   "nemotron-3-super": {
    "ctx": 262144,
    "cost": "?",
-   "notes": "timed out (502) when probed; do not use"
+   "notes": "timed out (502) when probed; do not use",
+   "bench": {
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "6/8",
+    "read": 3.0,
+    "honesty": 1,
+    "investigate": "4.5/10",
+    "investigate2": "1.0/10",
+    "suite_cost_pct": 0.34
+   },
+   "best_use": "cheap, passes short tasks; inconsistent on long ones (4.5, 1) and weaker code reasoning (6/8)",
+   "long_review_cost_pct": [
+    0.13,
+    0.18
+   ]
   },
   "nemotron-3-ultra": {
    "ctx": 262144,
@@ -402,12 +551,20 @@
    "think_off_works": true,
    "notes": "",
    "bench": {
-    "code_nothink": 0,
-    "code_think": 1,
-    "review_nothink": 4.0,
-    "review_think": 3.0,
-    "trap_nothink": 0
-   }
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": 3.0,
+    "honesty": 0,
+    "investigate": "4.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 0.66
+   },
+   "best_use": "capable (4, 7) but slow: close to the 10-minute limit every run; invented answers twice",
+   "long_review_cost_pct": [
+    1.41,
+    1.72
+   ]
   }
  }
 }
