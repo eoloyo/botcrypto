@@ -3,6 +3,7 @@
 
   tools/ollama/bench.py run         --out DIR [--models a,b] [--tests implement,debug,...] [--cap 40]
   tools/ollama/bench.py investigate --out DIR --models a,b      # long agent review; finalists only
+  tools/ollama/bench.py regrade     --out DIR                    # re-score long reviews from their transcripts
   tools/ollama/bench.py report      --out DIR [--update-models]
 
 Tests (answers are verified facts: hidden tests, executed code, files in this repo):
@@ -245,6 +246,65 @@ def run(a):
     print("DONE", flush=True)
 
 
+def _judge_review(cell, rubric):
+    """Score a review against the rubric with two judges. A run with no real report scores 0."""
+    for k in ("hits", "judges_agree"):
+        cell.pop(k, None)
+    if len(cell.get("answer") or "") < 1500:               # a closing remark or a progress note is not a report
+        cell["score"], cell["of"] = 0, 10
+        return
+    verdicts = []
+    for judge in JUDGES:                                   # two judges; disagreements are flagged for a human look
+        j = A.ask(rubric + "\n\nFor the review below decide, for each of G1 G2 G3 G4 G5 FP1 FP2, whether it applies (true/false). "
+                  'Be strict: the review must clearly make the point. Reply with JSON only, like {"G1":true,"G2":false,"G3":true,'
+                  '"G4":false,"G5":false,"FP1":false,"FP2":true}.\n\n=== REVIEW ===\n' + cell["answer"], role="general",
+                  models=[judge], system="You are a strict, literal grader. Reply with JSON only.", think=True, max_tokens=12000)
+        m = re.search(r"\{.*\}", j.get("content") or "", re.S)
+        try:
+            v = json.loads(m.group(0))
+            verdicts.append({x: bool(v.get(x)) for x in WEIGHTS})
+        except Exception:
+            pass
+    if verdicts:
+        cell["hits"] = {x: "".join("Y" if v[x] else "-" for v in verdicts) for x in WEIGHTS}
+        cell["score"] = round(sum(WEIGHTS[x] * sum(v[x] for v in verdicts) / len(verdicts) for x in WEIGHTS), 1)
+        cell["of"] = 10
+        cell["judges_agree"] = all(len(set(x)) == 1 for x in cell["hits"].values())
+
+
+def regrade(a):
+    """Re-score every long review from its transcript: grade the report itself (the longest message the agent
+    wrote), not just its last message, including reports finished before a run was stopped."""
+    out = Path(a.out); rubric = (HERE / "bench/review_rubric.md").read_text()
+    for f in sorted(out.glob("*.json")):
+        d = json.loads(f.read_text())
+        if not (isinstance(d, dict) and "tests" in d):
+            continue
+        changed = False
+        for key in [k for k in d["tests"] if k.startswith("investigate")]:
+            cell = d["tests"][key]; log = out / f"{d['model'].replace(':', '_')}.{key}.jsonl"
+            if not log.exists():
+                continue
+            longest = ""
+            for line in open(log):
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                if e.get("type") == "assistant":
+                    for c in (e.get("message") or {}).get("content") or []:
+                        if c.get("type") == "text" and len(c.get("text", "")) > len(longest):
+                            longest = c["text"]
+            if len(longest) >= 1500 and longest not in (cell.get("answer") or ""):
+                before = cell.get("score")
+                cell["answer"] = longest; cell["regraded"] = True
+                _judge_review(cell, rubric); changed = True
+                print(f"{d['model']:26} {key}: {before} -> {cell.get('score')} (status {cell.get('status')}, report {len(longest)} chars) hits={cell.get('hits')}", flush=True)
+        if changed:
+            f.write_text(json.dumps(d, indent=1))
+    print("DONE", flush=True)
+
+
 def investigate(a):
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     rubric = (HERE / "bench/review_rubric.md").read_text()
@@ -277,26 +337,7 @@ def investigate(a):
         finally:
             slots.put(k)
         cell = _meta(r); cell["answer"] = r.get("content") or ""
-        if cell["answer"] and r["status"] == 200:         # only a finished report is graded
-            verdicts = []
-            for judge in JUDGES:                          # two judges; disagreements are flagged for a human look
-                j = A.ask(rubric + "\n\nFor the review below decide, for each of G1 G2 G3 G4 G5 FP1 FP2, whether it applies (true/false). "
-                          'Be strict: the review must clearly make the point. Reply with JSON only, like {"G1":true,"G2":false,"G3":true,'
-                          '"G4":false,"G5":false,"FP1":false,"FP2":true}.\n\n=== REVIEW ===\n' + cell["answer"], role="general",
-                          models=[judge], system="You are a strict, literal grader. Reply with JSON only.", think=True, max_tokens=12000)
-                m = re.search(r"\{.*\}", j.get("content") or "", re.S)
-                try:
-                    v = json.loads(m.group(0))
-                    verdicts.append({x: bool(v.get(x)) for x in WEIGHTS})
-                except Exception:
-                    pass
-            if verdicts:
-                cell["hits"] = {x: "".join("Y" if v[x] else "-" for v in verdicts) for x in WEIGHTS}
-                cell["score"] = round(sum(WEIGHTS[x] * sum(v[x] for v in verdicts) / len(verdicts) for x in WEIGHTS), 1)
-                cell["of"] = 10
-                cell["judges_agree"] = all(len(set(x)) == 1 for x in cell["hits"].values())
-        elif r["status"] != 200:
-            cell["score"], cell["of"] = 0, 10              # no report within the budget
+        _judge_review(cell, rubric)
         if a.parallel == 1:
             time.sleep(15); b1 = _balance()
             if None not in (b0, b1):
@@ -353,7 +394,7 @@ def report(a):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("cmd", choices=["run", "investigate", "report"])
+    p.add_argument("cmd", choices=["run", "investigate", "regrade", "report"])
     p.add_argument("--out", required=True)
     p.add_argument("--models")
     p.add_argument("--tests", default=",".join(TESTS))
@@ -368,4 +409,4 @@ if __name__ == "__main__":
     a = p.parse_args()
     if a.include_expensive:
         os.environ["BENCH_INCLUDE_EXPENSIVE"] = "1"
-    {"run": run, "investigate": investigate, "report": report}[a.cmd](a)
+    {"run": run, "investigate": investigate, "regrade": regrade, "report": report}[a.cmd](a)

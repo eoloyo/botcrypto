@@ -59,7 +59,7 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     cmd = ["claude", "-p", task, "--model", model, "--output-format", "stream-json", "--verbose", "--no-session-persistence",
            "--permission-mode", "acceptEdits" if write else "default",
            "--tools", ",".join(tools), "--allowedTools", *allowed]
-    st = {"usage": {}, "text": "", "result": None, "tools": 0, "last": None, "repeat": 0}
+    st = {"usage": {}, "text": "", "result": None, "tools": 0, "last": None, "repeat": 0, "longest": ""}
 
     def reader(proc, f):
         for line in proc.stdout:
@@ -76,6 +76,8 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
                 for c in m.get("content") or []:
                     if c.get("type") == "text" and c.get("text", "").strip():
                         st["text"] = c["text"]
+                        if len(c["text"]) > len(st["longest"]):
+                            st["longest"] = c["text"]
                     if c.get("type") == "tool_use":
                         st["tools"] += 1
                         sig = c.get("name", "") + json.dumps(c.get("input"), sort_keys=True)
@@ -120,12 +122,20 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     r = {"model": model, "role": "agent", "secs": round(time.time() - t0, 1), "turns": len(st["usage"]), "tool_calls": st["tools"],
          "in_tokens": spent(), "out_tokens": sum(u[1] for u in st["usage"].values()),
          "context_peak": max((u[0] for u in st["usage"].values()), default=0), "log": str(log)}
+    def answer(final):
+        # An agent often writes its report and then adds a short closing remark (e.g. after a background
+        # process exits). The harness returns only that last message, so keep the report with it.
+        final = final or ""
+        if len(st["longest"]) > 3 * len(final) and st["longest"] not in final:
+            return st["longest"] + ("\n\n[closing message] " + final if final else "")
+        return final
+
     if stop:
-        r.update(status=408, error=stop, content=st["text"])          # keep the last thing it said
+        r.update(status=408, error=stop, content=answer(st["text"]))  # keep what it had written
     elif d and not d.get("is_error"):
-        r.update(status=200, content=d.get("result") or st["text"], denied=len(d.get("permission_denials") or []))
+        r.update(status=200, content=answer(d.get("result") or st["text"]), denied=len(d.get("permission_denials") or []))
     else:
-        r.update(status=500, error=str(d.get("result") or "agent exited without a result")[:400], content=st["text"])
+        r.update(status=500, error=str(d.get("result") or "agent exited without a result")[:400], content=answer(st["text"]))
     A._log(r)
     return r
 
