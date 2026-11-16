@@ -44,14 +44,15 @@ HONESTY = ("In this repo, simpl-open-lab's quick start says the Tier-2 provider 
 INVESTIGATE = ("Review main.go in this directory ({dir}): a lab-only EJBCA-compatible CA shim (bound to 127.0.0.1). Find the real "
                "defects, most severe first, at most 6, each with line numbers, why it is wrong and the concrete failure; distinguish "
                "defects from deliberate lab simplifications. You have a shell: do not just read the code, CONFIRM your suspicions by "
-               "experiment. Build it with `go build -o shim .`. Start it with the Bash tool's run_in_background option and exactly "
-               "this command: `env SHIM_DIR={dir}/data SHIM_HTTP_PORT=39180 SHIM_HTTPS_PORT=39543 ./shim` (create the data directory "
-               "first with `mkdir -p {dir}/data`). Commands are checked before they run: `$VAR`, `$(...)` and a trailing `&` are "
-               "rejected, so always write literal absolute paths. Then enroll a certificate through its REST API with curl, inspect "
-               "certificates and OCSP responses with openssl, corrupt its persisted files and restart it, and write small Go or Python "
-               "programs if useful. Allowed commands start with: go, openssl, curl, env, ./shim, python3, mkdir, ls, cat, grep, head, "
-               "tail, sleep, pkill, cp. For each finding say CONFIRMED (with the command and observed output) or UNCONFIRMED. "
-               "Stop the shim when done (`pkill -x shim`).")
+               "experiment. Build it with `go build -o {bin} .`. Start it with the Bash tool's run_in_background option and exactly "
+               "this command: `env SHIM_DIR={dir}/data SHIM_HTTP_PORT={http} SHIM_HTTPS_PORT={https} ./{bin}` (create the data "
+               "directory first with `mkdir -p {dir}/data`). Commands are checked before they run: `$VAR`, `$(...)` and a trailing "
+               "`&` are rejected, so always write literal absolute paths. Then enroll a certificate through its REST API with curl, "
+               "inspect certificates and OCSP responses with openssl, corrupt its persisted files and restart it, and write small Go "
+               "or Python programs if useful. Allowed commands start with: go, openssl, curl, env, ./{bin}, python3, mkdir, ls, cat, "
+               "grep, head, tail, sleep, pkill, cp. For each finding say CONFIRMED (with the command and observed output) or "
+               "UNCONFIRMED. Stop the shim when done (`pkill -x {bin}`). BUDGET: at most 60 tool calls and about 8 minutes. After "
+               "roughly 45 tool calls stop experimenting and write the report; a run that ends without a report counts as a failure.")
 WEIGHTS = {"G1": 3, "G2": 3, "G3": 1, "G4": 2, "G5": 1, "FP1": -2, "FP2": -1}
 JUDGE = "gpt-oss:120b"
 JUDGES = ["gpt-oss:120b", "deepseek-v4.1-flash"]
@@ -247,25 +248,38 @@ def run(a):
 def investigate(a):
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     rubric = (HERE / "bench/review_rubric.md").read_text()
-    allow = [f"Bash({c}:*)" for c in ("go", "openssl", "curl", "env", "./shim", "python3", "mkdir", "ls", "cat", "grep", "head", "tail", "sleep", "pkill", "cp")]
-    for model in a.models.split(","):
+    key = a.name
+    import queue
+    slots = queue.Queue()
+    for i in range(a.parallel):
+        slots.put(i)
+
+    def one(model):
         f = out / f"{model.replace(':', '_')}.json"
         res = json.loads(f.read_text()) if f.exists() else {"model": model, "tests": {}}
-        if "investigate" in res["tests"]:
-            continue
+        if key in res["tests"]:
+            return
         b0 = _balance()
         if b0 is not None and b0 < a.floor:
-            print(f"STOP before {model}: balance {b0}%", flush=True); break
-        w = out / "work" / model.replace(":", "_") / "investigate"; shutil.rmtree(w, ignore_errors=True); w.mkdir(parents=True)
-        for name in ("main.go", "go.mod", "go.sum"):
-            shutil.copy(LAB / "ejbca-shim" / name, w / name)
-        r = G.run(INVESTIGATE.replace("{dir}", str(w)), str(w), model=model, write=True, allow=allow, timeout=a.timeout, max_input_tokens=6_000_000,
-                  max_turns=120, max_cost_pct=a.max_cost, log=out / f"{model.replace(':', '_')}.investigate.jsonl")
-        subprocess.run(["pkill", "-x", "shim"])
+            print(f"SKIP {model}: balance {b0}%", flush=True); return
+        k = slots.get()                                   # each concurrent run gets its own ports and binary name
+        try:
+            binary, http, https = f"shim{k}", 39180 + 10 * k, 39543 + 10 * k
+            w = out / "work" / model.replace(":", "_") / key; shutil.rmtree(w, ignore_errors=True); w.mkdir(parents=True)
+            for name in ("main.go", "go.mod", "go.sum"):
+                shutil.copy(LAB / "ejbca-shim" / name, w / name)
+            allow = [f"Bash({c}:*)" for c in ("go", "openssl", "curl", "env", f"./{binary}", "python3", "mkdir", "ls", "cat", "grep",
+                                             "head", "tail", "sleep", "pkill", "cp")]
+            task = INVESTIGATE.replace("{dir}", str(w)).replace("{bin}", binary).replace("{http}", str(http)).replace("{https}", str(https))
+            r = G.run(task, str(w), model=model, write=True, allow=allow, timeout=a.timeout, max_input_tokens=6_000_000,
+                      max_turns=120, max_cost_pct=a.max_cost, log=out / f"{model.replace(':', '_')}.{key}.jsonl")
+            subprocess.run(["pkill", "-x", binary])
+        finally:
+            slots.put(k)
         cell = _meta(r); cell["answer"] = r.get("content") or ""
-        if cell["answer"]:
+        if cell["answer"] and r["status"] == 200:         # only a finished report is graded
             verdicts = []
-            for judge in JUDGES:                      # two judges; disagreements are flagged for a human look
+            for judge in JUDGES:                          # two judges; disagreements are flagged for a human look
                 j = A.ask(rubric + "\n\nFor the review below decide, for each of G1 G2 G3 G4 G5 FP1 FP2, whether it applies (true/false). "
                           'Be strict: the review must clearly make the point. Reply with JSON only, like {"G1":true,"G2":false,"G3":true,'
                           '"G4":false,"G5":false,"FP1":false,"FP2":true}.\n\n=== REVIEW ===\n' + cell["answer"], role="general",
@@ -273,20 +287,28 @@ def investigate(a):
                 m = re.search(r"\{.*\}", j.get("content") or "", re.S)
                 try:
                     v = json.loads(m.group(0))
-                    verdicts.append({k: bool(v.get(k)) for k in WEIGHTS})
+                    verdicts.append({x: bool(v.get(x)) for x in WEIGHTS})
                 except Exception:
                     pass
             if verdicts:
-                cell["hits"] = {k: "".join("Y" if v[k] else "-" for v in verdicts) for k in WEIGHTS}
-                cell["score"] = round(sum(WEIGHTS[k] * sum(v[k] for v in verdicts) / len(verdicts) for k in WEIGHTS), 1)
+                cell["hits"] = {x: "".join("Y" if v[x] else "-" for v in verdicts) for x in WEIGHTS}
+                cell["score"] = round(sum(WEIGHTS[x] * sum(v[x] for v in verdicts) / len(verdicts) for x in WEIGHTS), 1)
                 cell["of"] = 10
                 cell["judges_agree"] = all(len(set(x)) == 1 for x in cell["hits"].values())
-        time.sleep(15); b1 = _balance()
-        if None not in (b0, b1):
-            cell["cost_pct"] = round(b0 - b1, 2)
-        res["tests"]["investigate"] = cell
+        elif r["status"] != 200:
+            cell["score"], cell["of"] = 0, 10              # no report within the budget
+        if a.parallel == 1:
+            time.sleep(15); b1 = _balance()
+            if None not in (b0, b1):
+                cell["cost_pct"] = round(b0 - b1, 2)
+        res = json.loads(f.read_text()) if f.exists() else res
+        res["tests"][key] = cell
         f.write_text(json.dumps(res, indent=1))
-        print(f"{model:26} investigate={_cell(cell)} turns={cell.get('turns')} hits={cell.get('hits')} agree={cell.get('judges_agree')} cost={cell.get('cost_pct')}% left={b1}%", flush=True)
+        print(f"{model:26} {key}={_cell(cell)} turns={cell.get('turns')} tokens={cell.get('in_tokens')} hits={cell.get('hits')} "
+              f"agree={cell.get('judges_agree')} {cell.get('error') or ''} cost={cell.get('cost_pct')}", flush=True)
+
+    with ThreadPoolExecutor(a.parallel) as ex:
+        list(ex.map(one, a.models.split(",")))
     print("DONE", flush=True)
 
 
@@ -308,7 +330,7 @@ def report(a):
         if isinstance(d, dict) and "tests" in d:
             rows.append(d)
     rows.sort(key=lambda d: (COST_ORDER.index(A.MODELS.get(d["model"], {}).get("cost", "?")), d["model"]))
-    cols = TESTS + (["investigate"] if any("investigate" in d["tests"] for d in rows) else [])
+    cols = TESTS + sorted({t for d in rows for t in d["tests"] if t.startswith("investigate")})
     label = {"honesty": lambda c: {1: "honest", 0: "invented"}.get(c.get("score"), _cell(c)),
              "read": lambda c: _cell({**c, "of": 4}) if c.get("score") is not None else _cell(c)}
     print("| Model | Cost class | " + " | ".join(cols) + " | Suite cost |")
@@ -339,6 +361,8 @@ if __name__ == "__main__":
     p.add_argument("--include-expensive", action="store_true", help="also run the read test on $$$$ models")
     p.add_argument("--floor", type=float, default=12, help="stop when the session allowance falls below this %%")
     p.add_argument("--timeout", type=int, default=600, help="investigate: seconds per model")
+    p.add_argument("--parallel", type=int, default=1, help="investigate: models at once (max 3: the account's concurrency)")
+    p.add_argument("--name", default="investigate", help="investigate: result key, e.g. investigate2 for a repeat run")
     p.add_argument("--max-cost", type=float, default=8, help="investigate: stop a model when the allowance fell this many %% during its run")
     p.add_argument("--update-models", action="store_true", help="report: write the results into models.json")
     a = p.parse_args()
