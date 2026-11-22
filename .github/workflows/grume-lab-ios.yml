@@ -1,0 +1,87 @@
+name: Grume Lab iOS
+
+# Builds the Grume Lab iPhone app (folder grume-lab/) on a GitHub macOS runner, unsigned.
+# The .ipa is published as a pre-release; Sideloadly signs it with the user's Apple ID
+# at install time (see grume-lab/README.md).
+
+on:
+  push:
+    paths:
+      - "grume-lab/**"
+      - ".github/workflows/grume-lab-ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to publish the pre-release with the .ipa
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: grume-lab
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        id: build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project GrumeLab.xcodeproj \
+            -scheme GrumeLab \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log
+
+      # Turns compiler errors into annotations, readable on the run page and through the API.
+      - name: Report compile errors
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          grep -E "error:" build.log | sed -E 's#^/Users/runner/work/[^/]+/[^/]+/##' | sort -u > errors.txt || true
+          echo "## Erreurs de compilation" >> "$GITHUB_STEP_SUMMARY"
+          sed 's/^/    /' errors.txt >> "$GITHUB_STEP_SUMMARY"
+          head -10 errors.txt | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          if [ ! -s errors.txt ]; then tail -40 build.log; fi
+
+      - name: Package IPA
+        run: |
+          mkdir -p staging/Payload
+          cp -R build/Build/Products/Release-iphoneos/GrumeLab.app staging/Payload/
+          (cd staging && zip -qry ../GrumeLab.ipa Payload)
+          ls -lh GrumeLab.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrumeLab-ipa
+          path: grume-lab/GrumeLab.ipa
+
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="grume-lab-build-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" GrumeLab.ipa \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Grume Lab, build ${GITHUB_RUN_NUMBER}" \
+            --notes "App iPhone Grume Lab. Fichier GrumeLab.ipa à installer avec Sideloadly : voir grume-lab/README.md."

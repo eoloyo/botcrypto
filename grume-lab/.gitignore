@@ -1,0 +1,7 @@
+build/
+staging/
+*.ipa
+GrumeLab.xcodeproj/
+DerivedData/
+.DS_Store
+xcuserdata/
