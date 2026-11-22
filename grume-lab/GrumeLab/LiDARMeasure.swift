@@ -35,6 +35,10 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
 
     func resume() {
         guard let view = arView, !running else { return }
+        guard ARWorldTrackingConfiguration.isSupported else {
+            status = "La réalité augmentée n'est pas disponible sur cet appareil (simulateur ?)."
+            return
+        }
         let config = ARWorldTrackingConfiguration()
         config.planeDetection = [.horizontal, .vertical]
         if hasLiDAR { config.sceneReconstruction = .mesh }

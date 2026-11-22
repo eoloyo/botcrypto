@@ -48,6 +48,37 @@ final class ResonanceRecorder: ObservableObject {
         phase = .idle
     }
 
+    /// Analyses a synthetic knock (no microphone): modes at 312.4, 624.8 and 937.2 Hz,
+    /// 1 % damping on the first one. Used to check the analysis in the simulator.
+    func runDemo(range: ClosedRange<Double>) {
+        phase = .analyzing
+        analysis = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let sr = 48_000.0
+            let count = Int(2.0 * sr)
+            let start = Int(0.05 * sr)
+            let modes: [(f: Double, a: Double, z: Double)] = [(312.4, 1.0, 0.010), (624.8, 0.5, 0.012), (937.2, 0.3, 0.015)]
+            var generator = SystemRandomNumberGenerator()
+            var samples = [Float](repeating: 0, count: count)
+            for i in 0..<count {
+                var v = 0.0
+                if i >= start {
+                    let t = Double(i - start) / sr
+                    for m in modes {
+                        v += m.a * exp(-m.z * 2 * Double.pi * m.f * t) * sin(2 * Double.pi * m.f * t)
+                    }
+                }
+                v += 0.002 * (Double.random(in: -1...1, using: &generator))
+                samples[i] = Float(v * 0.4)
+            }
+            let result = ResonanceAnalyzer.analyze(samples: samples, sampleRate: sr, range: range)
+            DispatchQueue.main.async {
+                self.analysis = result
+                self.phase = result == nil ? .failed("Démo : pas de résonance trouvée.") : .done
+            }
+        }
+    }
+
     private func begin() {
         do {
             let session = AVAudioSession.sharedInstance()

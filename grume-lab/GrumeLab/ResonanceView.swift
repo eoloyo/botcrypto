@@ -28,6 +28,7 @@ struct ResonanceView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             Form {
                 Section("Grume") {
                     LogPicker()
@@ -52,6 +53,7 @@ struct ResonanceView: View {
 
                 if let a = recorder.analysis, recorder.phase == .done {
                     results(a)
+                        .id("results")
                 }
 
                 Section("Comment faire") {
@@ -65,8 +67,21 @@ struct ResonanceView: View {
             }
             .navigationTitle("Résonance")
             .scrollDismissesKeyboard(.interactively)
-            .onAppear(perform: syncLength)
+            .onAppear {
+                syncLength()
+                // Launch argument "-demoResonance YES": analyse a synthetic knock.
+                if UserDefaults.standard.bool(forKey: "demoResonance"), recorder.phase == .idle {
+                    let L = store.selected?.lengthM ?? 6
+                    recorder.runDemo(range: max(20, 2000 / (2 * L))...min(8000, 6500 / (2 * L)))
+                }
+            }
             .onChange(of: store.selectedID) { _, _ in syncLength() }
+            .onChange(of: recorder.phase) { _, phase in
+                if phase == .done {
+                    withAnimation { proxy.scrollTo("results", anchor: .top) }
+                }
+            }
+            }
         }
     }
 

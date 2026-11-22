@@ -2,14 +2,13 @@ import SwiftUI
 
 struct LogsView: View {
     @EnvironmentObject var store: LogStore
+    @State private var path: [UUID] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
-                ForEach($store.logs) { $log in
-                    NavigationLink {
-                        LogDetailView(log: $log)
-                    } label: {
+                ForEach(store.logs) { log in
+                    NavigationLink(value: log.id) {
                         LogRow(log: log)
                     }
                 }
@@ -19,11 +18,24 @@ struct LogsView: View {
                 }
             }
             .navigationTitle("Grumes")
+            .navigationDestination(for: UUID.self) { id in
+                if let i = store.logs.firstIndex(where: { $0.id == id }) {
+                    LogDetailView(log: $store.logs[i])
+                } else {
+                    Text("Cette grume a été supprimée.")
+                }
+            }
             .toolbar {
                 Button {
                     store.selectedID = store.addLog()
                 } label: {
                     Image(systemName: "plus")
+                }
+            }
+            .onAppear {
+                // Launch argument "-openLog YES": open the first log (simulator screenshots).
+                if path.isEmpty, UserDefaults.standard.bool(forKey: "openLog"), let first = store.logs.first {
+                    path = [first.id]
                 }
             }
         }
