@@ -50,10 +50,10 @@ struct ResonanceView: View {
                 }
 
                 Section { controls }
+                    .id("controls")
 
                 if let a = recorder.analysis, recorder.phase == .done {
                     results(a)
-                        .id("results")
                 }
 
                 Section("Comment faire") {
@@ -78,7 +78,7 @@ struct ResonanceView: View {
             .onChange(of: store.selectedID) { _, _ in syncLength() }
             .onChange(of: recorder.phase) { _, phase in
                 if phase == .done {
-                    withAnimation { proxy.scrollTo("results", anchor: .top) }
+                    withAnimation { proxy.scrollTo("controls", anchor: .top) }
                 }
             }
             }

@@ -30,7 +30,8 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
         updateSubscription = view.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
             self?.tick()
         }
-        resume()
+        // attach() runs inside SwiftUI's view update: publish state on the next turn.
+        DispatchQueue.main.async { [weak self] in self?.resume() }
     }
 
     func resume() {
