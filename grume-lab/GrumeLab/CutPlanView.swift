@@ -22,6 +22,7 @@ struct CutPlanView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             Form {
                 Section("Grume") {
                     if demoShape == nil { LogPicker() } else { Text("Grume de démonstration").foregroundStyle(.secondary) }
@@ -74,6 +75,7 @@ struct CutPlanView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(shape == nil || computing)
                 }
+                .id("calculer")
 
                 if !plans.isEmpty {
                     if plans.count > 1 {
@@ -98,6 +100,11 @@ struct CutPlanView: View {
             .scrollDismissesKeyboard(.interactively)
             .onAppear(perform: startDemoIfNeeded)
             .onChange(of: store.selectedID) { _, _ in plans = [] }
+            .onChange(of: plans.count) { _, count in
+                if count > 0 {
+                    withAnimation { proxy.scrollTo("calculer", anchor: .top) }
+                }
+            }
             .sheet(isPresented: $show3D) {
                 NavigationStack {
                     if let sh = planShape, plans.indices.contains(selected) {
@@ -110,6 +117,7 @@ struct CutPlanView: View {
                             }
                     }
                 }
+            }
             }
         }
     }
@@ -326,13 +334,20 @@ enum LogScene {
             }
         }
 
-        let L = max(0.5, shape.lengthM)
+        // Three-quarter view from the small end: the cut pattern shows on the end face
+        // and the length recedes in perspective. Drag to turn, pinch to zoom.
+        let sorted = shape.slices.sorted { $0.z < $1.z }
+        let smallAtStart = (sorted.first?.r ?? 0) <= (sorted.last?.r ?? 0)
+        let endZ = Float(smallAtStart ? (sorted.first?.z ?? 0) - zMid : (sorted.last?.z ?? 0) - zMid)
+        let dir: Float = smallAtStart ? 1 : -1
+        let R = Float(max(sorted.first?.r ?? 0.15, sorted.last?.r ?? 0.15))
         let cameraNode = SCNNode()
         cameraNode.camera = SCNCamera()
         cameraNode.camera?.zNear = 0.01
         cameraNode.camera?.zFar = 100
-        cameraNode.position = SCNVector3(Float(L * 0.45), Float(L * 0.3), Float(L * 0.8))
-        cameraNode.look(at: SCNVector3(0, 0, 0))
+        cameraNode.camera?.fieldOfView = 55
+        cameraNode.position = SCNVector3(R * 3.2, R * 2.4, endZ - dir * R * 5.5)
+        cameraNode.look(at: SCNVector3(0, 0, endZ + dir * R * 4))
         scene.rootNode.addChildNode(cameraNode)
         return (scene, cameraNode)
     }
