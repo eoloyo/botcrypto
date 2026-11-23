@@ -25,6 +25,8 @@ struct WoodLog: Codable, Identifiable, Hashable {
     var massKg: Double?
     var notes: String = ""
     var measurements: [ResonanceResult] = []
+    var sweepCm: Double?            // bow of the log (flèche), cm
+    var shape: LogShape?            // from the LiDAR scan
 
     /// Green softwood, order of magnitude, used when the mass is unknown.
     static let assumedGreenDensity = 850.0
@@ -54,6 +56,16 @@ struct WoodLog: Codable, Identifiable, Hashable {
     }
 
     var latest: ResonanceResult? { measurements.max { $0.date < $1.date } }
+
+    /// The scanned shape, or one estimated from the length, diameters and sweep.
+    var effectiveShape: LogShape? {
+        if let s = shape { return s }
+        guard let L = lengthM, L > 0.3 else { return nil }
+        let ds = [smallEndCm, largeEndCm].compactMap { $0 }.filter { $0 > 0 }
+        guard let a = ds.first, let b = ds.last else { return nil }
+        return LogShape.estimate(length: L, smallDiameter: min(a, b) / 100, largeDiameter: max(a, b) / 100,
+                                 sweep: (sweepCm ?? 0) / 100)
+    }
 
     var meanSpeed: Double? {
         guard !measurements.isEmpty else { return nil }

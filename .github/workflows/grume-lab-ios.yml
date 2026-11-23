@@ -159,6 +159,8 @@ jobs:
           shot 3-resonance -tab 1
           shot 4-resonance-demo -tab 1 -demoResonance YES
           shot 5-lidar -tab 2
+          shot 6-debit-demo -tab 3 -demoCut YES
+          shot 7-debit-3d -tab 3 -demoCut YES -demo3D YES
           xcrun simctl spawn "$UDID" log show --last 5m --style compact \
             --predicate 'process == "GrumeLab"' > shots/app-log.txt 2>&1 || true
           ls -l shots

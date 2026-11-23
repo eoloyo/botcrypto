@@ -4,6 +4,8 @@ App iPhone pour tester des grumes avant de les scier :
 
 - **Résonance** : on frappe le bout de la grume et l'app écoute. Elle donne la fréquence, la vitesse du son le long des fibres, la rigidité dynamique et l'amortissement (combien de temps le son dure).
 - **LiDAR** : mesure de la longueur et des diamètres en visant la grume avec la caméra (iPhone Pro avec LiDAR).
+- **Scan 3D** : forme réelle de la grume (diamètre, conicité, courbure tous les 10 cm), en tournant autour avec le LiDAR.
+- **Débit** : plan de coupe qui cherche le meilleur rendement (poutres et planches, trait de scie, tronçonnage éventuel), avec une coupe dessinée et une vue 3D.
 - **Grumes** : un carnet qui garde les dimensions et les mesures de chaque grume.
 
 Les résultats sont des indications pour trier les grumes. Ils ne remplacent pas un classement de structure officiel.
@@ -41,6 +43,18 @@ Calculs : vitesse = 2 × longueur × fréquence ; rigidité dynamique = densité
 - **Longueur** : visez le centre d'un bout, touchez « Point », marchez jusqu'à l'autre bout en gardant la grume dans l'image, visez son centre, touchez « Point ».
 - **Diamètre** : visez le bord de la coupe sous l'écorce, puis le bord opposé en passant par le cœur.
 - Précision attendue : de l'ordre du centimètre de près. Comparez au mètre ruban les premières fois.
+
+### Scan 3D (onglet LiDAR, mode « Scan 3D »)
+1. Visez le cœur du premier bout et touchez « Point », puis le cœur de l'autre bout.
+2. Tournez lentement autour de la grume à environ 1 m, en filmant le dessus et les côtés sur toute la longueur. Le compteur de points monte.
+3. Touchez « Calculer la forme », vérifiez les dimensions, puis « Enregistrer la forme dans la grume ».
+
+Le dessous de la grume (contre le sol ou les cales) n'est pas utilisé : la forme est reconstruite à partir du dessus et des côtés.
+
+### Débit
+L'app prend la forme scannée, ou à défaut une forme estimée à partir de la longueur, des diamètres et de la courbure. La partie sciable sur toute la longueur est l'intersection de toutes les coupes : la conicité et la courbure la réduisent. L'app y place une ou deux poutres (sections réglables) et des planches autour, ou seulement des planches, en tenant compte du trait de scie, et teste un tronçonnage en deux si la grume est courbe.
+
+Le rendement affiché est le volume des pièces sur le volume de la grume. Le plan ne voit pas l'intérieur du bois (nœuds, pourriture, cœur) : vérifiez les bouts avant de scier.
 
 ## Développement
 

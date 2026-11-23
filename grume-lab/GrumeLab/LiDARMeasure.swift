@@ -11,6 +11,14 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
     @Published var showMesh = false {
         didSet { applyDebugOptions() }
     }
+    /// Mesh points found around the log (scan mode, once both ends are marked).
+    @Published private(set) var meshPointCount = 0
+    var scanMode = false {
+        didSet {
+            if scanMode && hasLiDAR { showMesh = true }
+            meshPointCount = 0
+        }
+    }
 
     let hasLiDAR = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
 
@@ -77,6 +85,9 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
 
     private func tick() {
         frameCount += 1
+        if scanMode, points.count == 2, frameCount % 45 == 0 {
+            meshPointCount = nearbyMeshPoints().count
+        }
         guard frameCount % 5 == 0 else { return }
         if points.count == 1, let p = centerHit() {
             liveDistance = simd_distance(points[0], p)
@@ -139,6 +150,44 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
         anchor.addChild(bar)
         view.scene.addAnchor(anchor)
         anchors.append(anchor)
+    }
+
+    // MARK: 3D scan
+
+    /// LiDAR mesh vertices within `maxDistance` of the segment joining the two marked ends.
+    func nearbyMeshPoints(maxDistance: Float = 0.8) -> [SIMD3<Float>] {
+        guard points.count == 2, let frame = arView?.session.currentFrame else { return [] }
+        let a = points[0], b = points[1]
+        let ab = b - a
+        let len2 = simd_length_squared(ab)
+        guard len2 > 0.01 else { return [] }
+        var out: [SIMD3<Float>] = []
+        for anchor in frame.anchors {
+            guard let mesh = anchor as? ARMeshAnchor else { continue }
+            let source = mesh.geometry.vertices
+            let base = source.buffer.contents()
+            let transform = mesh.transform
+            for i in 0..<source.count {
+                let ptr = base.advanced(by: source.offset + source.stride * i).assumingMemoryBound(to: Float.self)
+                let w = transform * SIMD4<Float>(ptr[0], ptr[1], ptr[2], 1)
+                let p = SIMD3<Float>(w.x, w.y, w.z)
+                let t = simd_dot(p - a, ab) / len2
+                guard t > -0.05, t < 1.05 else { continue }
+                if simd_distance(p, a + t * ab) < maxDistance { out.append(p) }
+            }
+        }
+        return out
+    }
+
+    /// Fits the log shape from the mesh. Calls back on the main thread.
+    func computeShape(expectedRadius: Double?, completion: @escaping (LogShape?) -> Void) {
+        guard points.count == 2 else { completion(nil); return }
+        let cloud = nearbyMeshPoints()
+        let a = points[0], b = points[1]
+        DispatchQueue.global(qos: .userInitiated).async {
+            let shape = LogShapeFitter.fit(points: cloud, endA: a, endB: b, expectedRadius: expectedRadius)
+            DispatchQueue.main.async { completion(shape) }
+        }
     }
 
     // MARK: ARSessionDelegate

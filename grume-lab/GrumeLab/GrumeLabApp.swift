@@ -27,6 +27,9 @@ struct ContentView: View {
             LiDARView()
                 .tabItem { Label("LiDAR", systemImage: "ruler") }
                 .tag(2)
+            CutPlanView()
+                .tabItem { Label("Débit", systemImage: "square.split.2x2") }
+                .tag(3)
         }
         .tint(.orange)
     }

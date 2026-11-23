@@ -82,7 +82,12 @@ struct LogDetailView: View {
                 NumberField(title: "Longueur", unit: "m", value: $log.lengthM)
                 NumberField(title: "Ø petit bout", unit: "cm", value: $log.smallEndCm)
                 NumberField(title: "Ø gros bout", unit: "cm", value: $log.largeEndCm)
+                NumberField(title: "Courbure (flèche)", unit: "cm", value: $log.sweepCm)
                 NumberField(title: "Masse", unit: "kg", value: $log.massKg)
+                if let sh = log.shape {
+                    LabeledContent("Forme 3D", value: "scannée, \(sh.slices.count) coupes")
+                    Button("Supprimer la forme scannée", role: .destructive) { log.shape = nil }
+                }
             }
 
             Section("Calculs") {
