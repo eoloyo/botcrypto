@@ -27,6 +27,7 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
     private var updateSubscription: Cancellable?
     private var frameCount = 0
     private var running = false
+    private var colorSamples: [(p: SIMD3<Float>, rgb: UInt32)] = []
 
     var distance: Float? {
         points.count == 2 ? simd_distance(points[0], points[1]) : nil
@@ -88,6 +89,9 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
         if scanMode, points.count == 2, frameCount % 45 == 0 {
             meshPointCount = nearbyMeshPoints().count
         }
+        if scanMode, points.count == 2, frameCount % 20 == 10 {
+            sampleColors()
+        }
         guard frameCount % 5 == 0 else { return }
         if points.count == 1, let p = centerHit() {
             liveDistance = simd_distance(points[0], p)
@@ -117,6 +121,7 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     func clear() {
+        colorSamples.removeAll()
         points.removeAll()
         liveDistance = nil
         rebuild()
@@ -184,9 +189,59 @@ final class ARMeasureModel: NSObject, ObservableObject, ARSessionDelegate {
         guard points.count == 2 else { completion(nil); return }
         let cloud = nearbyMeshPoints()
         let a = points[0], b = points[1]
+        let colors = colorSamples
         DispatchQueue.global(qos: .userInitiated).async {
-            let shape = LogShapeFitter.fit(points: cloud, endA: a, endB: b, expectedRadius: expectedRadius)
+            let shape = LogShapeFitter.fit(points: cloud, endA: a, endB: b, expectedRadius: expectedRadius,
+                                           colorSamples: colors)
             DispatchQueue.main.async { completion(shape) }
+        }
+    }
+
+    /// Colours the mesh points seen by the camera ("photogrammétrie" light): each point
+    /// facing the camera takes the colour of the pixel it projects to.
+    private func sampleColors() {
+        guard points.count == 2, let frame = arView?.session.currentFrame else { return }
+        let cloud = nearbyMeshPoints(maxDistance: 0.6)
+        guard !cloud.isEmpty else { return }
+        let buffer = frame.capturedImage
+        guard CVPixelBufferGetPlaneCount(buffer) >= 2 else { return }
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        guard let yBase = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)?.assumingMemoryBound(to: UInt8.self),
+              let cBase = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)?.assumingMemoryBound(to: UInt8.self) else { return }
+        let width = CVPixelBufferGetWidthOfPlane(buffer, 0), height = CVPixelBufferGetHeightOfPlane(buffer, 0)
+        let yStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
+        let cStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 1)
+        let camera = frame.camera
+        let viewport = CGSize(width: width, height: height)
+        let toCamera = camera.transform.inverse
+        let eye = SIMD3<Float>(camera.transform.columns.3.x, camera.transform.columns.3.y, camera.transform.columns.3.z)
+        let a = points[0], ab = points[1] - points[0]
+        let len2 = simd_length_squared(ab)
+        let step = max(1, cloud.count / 4000)
+        var i = 0
+        while i < cloud.count {
+            let p = cloud[i]
+            i += step
+            let c = toCamera * SIMD4<Float>(p.x, p.y, p.z, 1)
+            guard c.z < -0.1, c.z > -4 else { continue }
+            // Keep points on the side of the log facing the camera.
+            let t = simd_dot(p - a, ab) / len2
+            let normal = p - (a + t * ab)
+            guard simd_dot(normal, eye - p) > 0 else { continue }
+            let s = camera.projectPoint(p, orientation: .landscapeRight, viewportSize: viewport)
+            let x = Int(s.x), y = Int(s.y)
+            guard x >= 0, y >= 0, x < width, y < height else { continue }
+            let Y = Float(yBase[y * yStride + x])
+            let ci = (y / 2) * cStride + (x / 2) * 2
+            let cb = Float(cBase[ci]) - 128, cr = Float(cBase[ci + 1]) - 128
+            let r = UInt32(max(0, min(255, Y + 1.402 * cr)))
+            let g = UInt32(max(0, min(255, Y - 0.344 * cb - 0.714 * cr)))
+            let b = UInt32(max(0, min(255, Y + 1.772 * cb)))
+            colorSamples.append((p, (r << 16) | (g << 8) | b))
+        }
+        if colorSamples.count > 150_000 {
+            colorSamples.removeFirst(colorSamples.count - 150_000)
         }
     }
 

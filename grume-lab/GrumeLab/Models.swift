@@ -27,6 +27,8 @@ struct WoodLog: Codable, Identifiable, Hashable {
     var measurements: [ResonanceResult] = []
     var sweepCm: Double?            // bow of the log (flèche), cm
     var shape: LogShape?            // from the LiDAR scan
+    var smallEnd: EndFaceResult?    // photo analysis of each end
+    var largeEnd: EndFaceResult?
 
     /// Green softwood, order of magnitude, used when the mass is unknown.
     static let assumedGreenDensity = 850.0
@@ -65,6 +67,28 @@ struct WoodLog: Codable, Identifiable, Hashable {
         guard let a = ds.first, let b = ds.last else { return nil }
         return LogShape.estimate(length: L, smallDiameter: min(a, b) / 100, largeDiameter: max(a, b) / 100,
                                  sweep: (sweepCm ?? 0) / 100)
+    }
+
+    /// Pith position along the log, in the shape's frame (metres), from the end photos.
+    /// Photos are taken facing the end, phone upright: photo x maps to ∓u depending on the end.
+    func pithLine(for shape: LogShape) -> ((Double) -> (x: Double, y: Double))? {
+        let sorted = shape.slices.sorted { $0.z < $1.z }
+        guard let first = sorted.first, let last = sorted.last, last.z > first.z else { return nil }
+        let smallAtStart = first.r <= last.r
+        func offset(_ e: EndFaceResult?, atStart: Bool) -> (x: Double, y: Double)? {
+            guard let e else { return nil }
+            let o = e.pithOffsetMm
+            return ((atStart ? -o.x : o.x) / 1000, o.y / 1000)
+        }
+        let startOffset = offset(smallAtStart ? smallEnd : largeEnd, atStart: true)
+        let endOffset = offset(smallAtStart ? largeEnd : smallEnd, atStart: false)
+        guard let a = startOffset ?? endOffset, let b = endOffset ?? startOffset else { return nil }
+        let p0 = (x: first.cx + a.x, y: first.cy + a.y)
+        let p1 = (x: last.cx + b.x, y: last.cy + b.y)
+        return { z in
+            let t = (z - first.z) / (last.z - first.z)
+            return (p0.x + (p1.x - p0.x) * t, p0.y + (p1.y - p0.y) * t)
+        }
     }
 
     var meanSpeed: Double? {

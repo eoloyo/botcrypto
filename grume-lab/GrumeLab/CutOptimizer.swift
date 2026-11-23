@@ -14,6 +14,7 @@ struct CutSettings {
     var preferBeams: Bool
     var allowBucking: Bool
     var minPieceLength: Double    // m
+    var centerOnPith: Bool = true
 
     /// "20x20 15x22,5 7,5x22,5" (cm) → sections in metres.
     static func parseSections(_ text: String) -> [(b: Double, h: Double)] {
@@ -34,6 +35,7 @@ struct CutPiece: Hashable {
     var y0: Double
     var x1: Double
     var y1: Double
+    var containsPith = false
 
     var width: Double { x1 - x0 }
     var height: Double { y1 - y0 }
@@ -53,9 +55,16 @@ struct SegmentPlan: Identifiable {
     var centerY: Double
     var logVolume: Double
     var score: Double
+    var pithSmall: PlanePoint?   // pith at the small and large end of this length, pattern frame
+    var pithLarge: PlanePoint?
 
     var length: Double { z1 - z0 }
     var piecesVolume: Double { pieces.reduce(0) { $0 + $1.area } * length }
+}
+
+struct PlanePoint: Hashable {
+    var x: Double
+    var y: Double
 }
 
 struct CutPlan: Identifiable {
@@ -258,11 +267,20 @@ enum CutOptimizer {
 
     // MARK: one length of log
 
-    static func segmentPlan(_ slices: [LogSlice], z0: Double, z1: Double, beams: Bool, _ s: CutSettings) -> SegmentPlan? {
+    typealias PithLine = (Double) -> (x: Double, y: Double)
+
+    static func segmentPlan(_ slices: [LogSlice], z0: Double, z1: Double, beams: Bool, _ s: CutSettings,
+                            pith: PithLine? = nil) -> SegmentPlan? {
         let seg = slices.filter { $0.z >= z0 - 1e-6 && $0.z <= z1 + 1e-6 }
         guard seg.count >= 2 else { return nil }
         var base = seg.map { Disk(x: $0.cx, y: $0.cy, r: $0.r) }
-        if (seg.first?.r ?? 0) > (seg.last?.r ?? 0) { base.reverse() }   // small end first
+        let smallFirst = (seg.first?.r ?? 0) <= (seg.last?.r ?? 0)
+        if !smallFirst { base.reverse() }   // small end first
+        let pithEnds: (small: PlanePoint, large: PlanePoint)? = pith.map { f in
+            let a = f(z0), b = f(z1)
+            let pa = PlanePoint(x: a.x, y: a.y), pb = PlanePoint(x: b.x, y: b.y)
+            return smallFirst ? (pa, pb) : (pb, pa)
+        }
         let logVolume = LogShape.volume(of: seg)
         let length = z1 - z0
         let beamWeight = s.preferBeams ? 1.35 : 1.0
@@ -272,7 +290,24 @@ enum CutOptimizer {
         let angles = beams ? [0.0, Double.pi / 2] : [0.0, Double.pi / 4, Double.pi / 2, 3 * Double.pi / 4]
         for angle in angles {
             let disks = Region.rotate(base, by: -angle)
-            let c = Region.innerCenter(disks)
+            let ca = cos(-angle), sa = sin(-angle)
+            func rot(_ p: PlanePoint) -> PlanePoint { PlanePoint(x: p.x * ca - p.y * sa, y: p.x * sa + p.y * ca) }
+            let pithS = pithEnds.map { rot($0.small) }
+            let pithL = pithEnds.map { rot($0.large) }
+            var c = Region.innerCenter(disks)
+            if s.centerOnPith, beams, let ps = pithS, let pl = pithL {
+                let m = (x: (ps.x + pl.x) / 2, y: (ps.y + pl.y) / 2)
+                if Region.inside(m.x, m.y, disks) { c = m }
+            }
+            func markPith(_ pieces: [CutPiece]) -> [CutPiece] {
+                pieces.map { p in
+                    var q = p
+                    for pt in [pithS, pithL].compactMap({ $0 }) where pt.x > p.x0 && pt.x < p.x1 && pt.y > p.y0 && pt.y < p.y1 {
+                        q.containsPith = true
+                    }
+                    return q
+                }
+            }
             if beams {
                 for sec in s.beamSections {
                     for (b, h) in [(sec.b, sec.h), (sec.h, sec.b)] {
@@ -284,8 +319,9 @@ enum CutOptimizer {
                                     if score > (best?.score ?? 0) {
                                         best = SegmentPlan(z0: z0, z1: z1, angle: angle,
                                                            pattern: n == 1 ? "Poutre et planches" : "Deux poutres et planches",
-                                                           pieces: pieces, disks: disks, centerX: c.x, centerY: c.y,
-                                                           logVolume: logVolume, score: score)
+                                                           pieces: markPith(pieces), disks: disks, centerX: c.x, centerY: c.y,
+                                                           logVolume: logVolume, score: score,
+                                                           pithSmall: pithS, pithLarge: pithL)
                                     }
                                 }
                             }
@@ -296,8 +332,9 @@ enum CutOptimizer {
                 let score = pieces.reduce(0) { $0 + $1.area } * length
                 if score > (best?.score ?? 0) {
                     best = SegmentPlan(z0: z0, z1: z1, angle: angle, pattern: "Planches (sciage en plot)",
-                                       pieces: pieces, disks: disks, centerX: c.x, centerY: c.y,
-                                       logVolume: logVolume, score: score)
+                                       pieces: markPith(pieces), disks: disks, centerX: c.x, centerY: c.y,
+                                       logVolume: logVolume, score: score,
+                                       pithSmall: pithS, pithLarge: pithL)
                 }
             }
         }
@@ -305,10 +342,11 @@ enum CutOptimizer {
     }
 
     /// Best plan for a length, following the beam preference.
-    static func preferredPlan(_ slices: [LogSlice], z0: Double, z1: Double, _ s: CutSettings) -> SegmentPlan? {
-        let withBeams = s.beamSections.isEmpty ? nil : segmentPlan(slices, z0: z0, z1: z1, beams: true, s)
+    static func preferredPlan(_ slices: [LogSlice], z0: Double, z1: Double, _ s: CutSettings,
+                              pith: PithLine? = nil) -> SegmentPlan? {
+        let withBeams = s.beamSections.isEmpty ? nil : segmentPlan(slices, z0: z0, z1: z1, beams: true, s, pith: pith)
         if s.preferBeams, let p = withBeams { return p }
-        let boards = segmentPlan(slices, z0: z0, z1: z1, beams: false, s)
+        let boards = segmentPlan(slices, z0: z0, z1: z1, beams: false, s, pith: pith)
         switch (withBeams, boards) {
         case let (a?, b?): return a.piecesVolume >= b.piecesVolume ? a : b
         case let (a?, nil): return a
@@ -323,12 +361,12 @@ enum CutOptimizer {
         String(format: "%.2f", x).replacingOccurrences(of: ".", with: ",")
     }
 
-    static func plans(for shape: LogShape, settings s: CutSettings) -> [CutPlan] {
+    static func plans(for shape: LogShape, settings s: CutSettings, pith: PithLine? = nil) -> [CutPlan] {
         let slices = shape.slices.sorted { $0.z < $1.z }
         guard let start = slices.first?.z, let end = slices.last?.z, end - start > 0.3 else { return [] }
 
         var result: [CutPlan] = []
-        let whole = preferredPlan(slices, z0: start, z1: end, s).map {
+        let whole = preferredPlan(slices, z0: start, z1: end, s, pith: pith).map {
             CutPlan(title: "Sans tronçonner (\(meters(end - start)) m)", segments: [$0])
         }
 
@@ -336,8 +374,8 @@ enum CutOptimizer {
         if s.allowBucking {
             var cut = start + s.minPieceLength
             while cut <= end - s.minPieceLength + 1e-9 {
-                if let a = preferredPlan(slices, z0: start, z1: cut, s),
-                   let b = preferredPlan(slices, z0: cut, z1: end, s) {
+                if let a = preferredPlan(slices, z0: start, z1: cut, s, pith: pith),
+                   let b = preferredPlan(slices, z0: cut, z1: end, s, pith: pith) {
                     let plan = CutPlan(title: "Tronçonner à \(meters(cut - start)) m", segments: [a, b])
                     if plan.score > (bucked?.score ?? 0) { bucked = plan }
                 }
@@ -353,7 +391,7 @@ enum CutOptimizer {
             result = [b]
         }
 
-        if s.preferBeams, let boards = segmentPlan(slices, z0: start, z1: end, beams: false, s) {
+        if s.preferBeams, let boards = segmentPlan(slices, z0: start, z1: end, beams: false, s, pith: pith) {
             result.append(CutPlan(title: "Planches seulement", segments: [boards]))
         }
         return result

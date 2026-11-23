@@ -70,6 +70,9 @@ struct LogRow: View {
 
 struct LogDetailView: View {
     @Binding var log: WoodLog
+    @State private var endSheet: LogEnd?
+    @State private var demoEnd = false
+    @State private var show3D = false
 
     var body: some View {
         Form {
@@ -113,6 +116,27 @@ struct LogDetailView: View {
                 }
             }
 
+            EndsSection(log: log) { endSheet = $0 }
+
+            if let sh = log.shape {
+                Section {
+                    Button {
+                        show3D = true
+                    } label: {
+                        Label("Voir la grume scannée en 3D", systemImage: "cube.transparent")
+                    }
+                    .sheet(isPresented: $show3D) {
+                        NavigationStack {
+                            Log3DView(shape: sh, plan: nil)
+                                .ignoresSafeArea(edges: .bottom)
+                                .navigationTitle(log.name)
+                                .navigationBarTitleDisplayMode(.inline)
+                                .toolbar { Button("Fermer") { show3D = false } }
+                        }
+                    }
+                }
+            }
+
             Section("Mesures de résonance") {
                 if log.measurements.isEmpty {
                     Text("Aucune mesure pour l'instant.").foregroundStyle(.secondary)
@@ -131,6 +155,77 @@ struct LogDetailView: View {
         .navigationTitle(log.name)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
+        .fullScreenCover(item: $endSheet) { end in
+            EndFaceView(log: $log, end: end, demo: demoEnd)
+        }
+        .onAppear {
+            // Launch argument "-demoEnd YES": analyse a synthetic end photo (simulator screenshots).
+            if UserDefaults.standard.bool(forKey: "demoEnd"), !demoEnd {
+                demoEnd = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { endSheet = .small }
+            }
+        }
+    }
+}
+
+/// Pith and rings at both ends, and how they compare.
+struct EndsSection: View {
+    let log: WoodLog
+    let open: (LogEnd) -> Void
+
+    var body: some View {
+        Section("Cœur et cernes (photos des bouts)") {
+            endRow(.small, log.smallEnd)
+            endRow(.large, log.largeEnd)
+            if let s = log.smallEnd, let l = log.largeEnd {
+                let diff = l.ringCount - s.ringCount
+                LabeledContent("Écart de cernes", value: "\(Int(diff.rounded())) cernes")
+                if diff > 0 {
+                    Text("Le gros bout a environ \(Int(diff.rounded())) cernes de plus : l'arbre a mis à peu près autant d'années pour pousser de la hauteur du gros bout à celle du petit bout.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Largeur des cernes", value: "\(Fmt.num(s.meanRingWidthMm, 1)) / \(Fmt.num(l.meanRingWidthMm, 1)) mm")
+                if let L = log.lengthM, L > 0 {
+                    let taper = (l.diameterMm - s.diameterMm) / 10 / L
+                    LabeledContent("Conicité de la grume", value: "\(Fmt.num(taper, 1)) cm/m")
+                }
+                LabeledContent("Cœur décalé (petit / gros)", value: "\(Fmt.num(s.eccentricity * 100)) / \(Fmt.num(l.eccentricity * 100)) % du rayon")
+                if let js = s.juvenileDiameterMm, let jl = l.juvenileDiameterMm {
+                    LabeledContent("Bois juvénile", value: "Ø \(Fmt.num(js / 10, 1)) / \(Fmt.num(jl / 10, 1)) cm")
+                }
+                if let hs = s.heartwoodDiameterMm, let hl = l.heartwoodDiameterMm {
+                    LabeledContent("Duramen", value: "Ø \(Fmt.num(hs / 10, 1)) / \(Fmt.num(hl / 10, 1)) cm")
+                }
+                Text("La position du cœur aux deux bouts est reportée sur le plan de coupe (onglet Débit).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Photographiez les deux bouts pour comparer les cernes et suivre le cœur sur la longueur.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func endRow(_ end: LogEnd, _ r: EndFaceResult?) -> some View {
+        Button {
+            open(end)
+        } label: {
+            HStack {
+                Image(systemName: r == nil ? "camera" : "checkmark.circle.fill")
+                    .foregroundStyle(r == nil ? Color.accentColor : Color.green)
+                Text(end.title)
+                Spacer()
+                if let r {
+                    Text("≈ \(Int(r.ringCount.rounded())) cernes · cœur \(Fmt.num(r.eccentricity * 100)) %")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Photo à prendre").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }
 

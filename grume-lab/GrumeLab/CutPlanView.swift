@@ -10,6 +10,7 @@ struct CutPlanView: View {
     @AppStorage("cut.preferBeams") private var preferBeams = true
     @AppStorage("cut.bucking") private var allowBucking = true
     @AppStorage("cut.minLength") private var minLength = 2.0
+    @AppStorage("cut.centerOnPith") private var centerOnPith = true
 
     @State private var plans: [CutPlan] = []
     @State private var planShape: LogShape?
@@ -17,8 +18,17 @@ struct CutPlanView: View {
     @State private var computing = false
     @State private var show3D = false
     @State private var demoShape: LogShape?
+    @State private var juvenileRadius: Double?
 
     private var shape: LogShape? { demoShape ?? store.selected?.effectiveShape }
+
+    /// Pith along the log, from the end photos (or the demo).
+    private func pithLine(for sh: LogShape) -> CutOptimizer.PithLine? {
+        if demoShape != nil {
+            return { z in (0.02 + (0.035 - 0.02) * z / 6, 0.015 - 0.025 * z / 6) }
+        }
+        return store.selected?.pithLine(for: sh)
+    }
 
     var body: some View {
         NavigationStack {
@@ -55,6 +65,7 @@ struct CutPlanView: View {
                             .autocorrectionDisabled()
                     }
                     Toggle("Priorité aux poutres", isOn: $preferBeams)
+                    Toggle("Centrer la poutre sur le cœur", isOn: $centerOnPith)
                     Toggle("Essayer de tronçonner", isOn: $allowBucking)
                     if allowBucking {
                         NumberField(title: "Longueur mini d'un tronçon", unit: "m", value: doubleBinding($minLength))
@@ -90,7 +101,8 @@ struct CutPlanView: View {
                         }
                     }
                     if plans.indices.contains(selected) {
-                        PlanDetail(plan: plans[selected], comparedTo: selected == 0 && plans.count > 1 ? plans[1] : nil) {
+                        PlanDetail(plan: plans[selected], comparedTo: selected == 0 && plans.count > 1 ? plans[1] : nil,
+                                   juvenileRadius: juvenileRadius) {
                             show3D = true
                         }
                     }
@@ -133,15 +145,22 @@ struct CutPlanView: View {
                     beamSections: CutSettings.parseSections(sectionsText),
                     preferBeams: preferBeams,
                     allowBucking: allowBucking,
-                    minPieceLength: max(0.5, minLength))
+                    minPieceLength: max(0.5, minLength),
+                    centerOnPith: centerOnPith)
     }
 
     private func compute() {
         guard let sh = shape else { return }
         computing = true
         let s = settings
+        let pith = pithLine(for: sh)
+        if demoShape != nil {
+            juvenileRadius = 0.06
+        } else {
+            juvenileRadius = store.selected?.smallEnd?.juvenileDiameterMm.map { $0 / 2000 }
+        }
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = CutOptimizer.plans(for: sh, settings: s)
+            let result = CutOptimizer.plans(for: sh, settings: s, pith: pith)
             DispatchQueue.main.async {
                 plans = result
                 planShape = sh
@@ -163,6 +182,7 @@ struct CutPlanView: View {
 struct PlanDetail: View {
     let plan: CutPlan
     let comparedTo: CutPlan?
+    var juvenileRadius: Double?
     let open3D: () -> Void
 
     var body: some View {
@@ -194,9 +214,11 @@ struct PlanDetail: View {
                 if plan.segments.count > 1 {
                     Text(seg.pattern).font(.subheadline).foregroundStyle(.secondary)
                 }
-                CrossSectionView(plan: seg)
+                CrossSectionView(plan: seg, juvenileRadius: juvenileRadius)
                     .frame(height: 260)
-                Text("Vue depuis le petit bout. En clair : la partie sciable sur toute la longueur du tronçon. Cercles : petit et gros bout.")
+                Text(seg.pithSmall == nil
+                     ? "Vue depuis le petit bout. En clair : la partie sciable sur toute la longueur du tronçon. Cercles : petit et gros bout."
+                     : "Vue depuis le petit bout. En clair : la partie sciable sur toute la longueur. Point rouge plein : cœur au petit bout ; rond rouge : cœur au gros bout ; pointillés rouges : bois juvénile.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 ForEach(summary(seg), id: \.self) { line in
@@ -217,9 +239,10 @@ struct PlanDetail: View {
         var order: [String] = []
         for p in seg.pieces {
             let a = min(p.width, p.height), b = max(p.width, p.height)
-            let key = p.kind == .beam
+            let base = p.kind == .beam
                 ? "poutre \(cm(a)) × \(cm(b)) cm"
                 : "planche \(Fmt.num((a * 1000).rounded())) mm × \(cm(b)) cm"
+            let key = p.containsPith ? base + " (avec cœur)" : base
             if counts[key] == nil { order.append(key) }
             counts[key, default: 0] += 1
         }
@@ -230,6 +253,7 @@ struct PlanDetail: View {
 
 struct CrossSectionView: View {
     let plan: SegmentPlan
+    var juvenileRadius: Double?
 
     var body: some View {
         Canvas { ctx, size in
@@ -272,8 +296,23 @@ struct CrossSectionView: View {
                 if p.kind == .beam {
                     let label = "\(Fmt.num(p.width * 100, 1))×\(Fmt.num(p.height * 100, 1))"
                     ctx.draw(Text(label).font(.caption.bold()).foregroundColor(.black),
-                             at: CGPoint(x: rect.midX, y: rect.midY))
+                             at: CGPoint(x: rect.midX, y: rect.midY + 12))
                 }
+            }
+
+            if let ps = plan.pithSmall {
+                let c = pt(ps.x, ps.y)
+                if let jr = juvenileRadius {
+                    let r = jr * scale
+                    ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)),
+                               with: .color(.red), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                }
+                ctx.fill(Path(ellipseIn: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8)), with: .color(.red))
+            }
+            if let pl = plan.pithLarge {
+                let c = pt(pl.x, pl.y)
+                ctx.stroke(Path(ellipseIn: CGRect(x: c.x - 5, y: c.y - 5, width: 10, height: 10)),
+                           with: .color(.red), lineWidth: 1.5)
             }
         }
     }
@@ -303,9 +342,9 @@ enum LogScene {
         let zs = shape.slices.map(\.z)
         let zMid = ((zs.min() ?? 0) + (zs.max() ?? 0)) / 2
 
-        let log = SCNNode(geometry: logGeometry(shape, zMid: zMid))
+        let log = SCNNode(geometry: logGeometry(shape, zMid: zMid, segments: shape.colorAngles ?? 40))
         let wood = SCNMaterial()
-        wood.diffuse.contents = UIColor(red: 0.62, green: 0.45, blue: 0.30, alpha: 1)
+        wood.diffuse.contents = shape.colors == nil ? UIColor(red: 0.62, green: 0.45, blue: 0.30, alpha: 1) : UIColor.white
         wood.transparency = plan == nil ? 1 : 0.28
         wood.isDoubleSided = true
         wood.writesToDepthBuffer = plan == nil
@@ -375,7 +414,23 @@ enum LogScene {
                 }
             }
         }
-        let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: vertices), SCNGeometrySource(normals: normals)],
+        var sources = [SCNGeometrySource(vertices: vertices), SCNGeometrySource(normals: normals)]
+        if let colors = shape.colors, shape.colorAngles == segments, colors.count == slices.count * segments {
+            // Colours were stored in the order of shape.slices, which is already sorted by z.
+            var rgb: [Float] = []
+            rgb.reserveCapacity(colors.count * 3)
+            for c in colors {
+                rgb.append(Float((c >> 16) & 0xFF) / 255)
+                rgb.append(Float((c >> 8) & 0xFF) / 255)
+                rgb.append(Float(c & 0xFF) / 255)
+            }
+            let data = rgb.withUnsafeBufferPointer { Data(buffer: $0) }
+            sources.append(SCNGeometrySource(data: data, semantic: .color, vectorCount: colors.count,
+                                             usesFloatComponents: true, componentsPerVector: 3,
+                                             bytesPerComponent: MemoryLayout<Float>.size, dataOffset: 0,
+                                             dataStride: MemoryLayout<Float>.size * 3))
+        }
+        let geometry = SCNGeometry(sources: sources,
                                    elements: [SCNGeometryElement(indices: indices, primitiveType: .triangles)])
         return geometry
     }

@@ -19,6 +19,9 @@ struct LogShape: Codable, Hashable {
     var slices: [LogSlice]
     var source: Source
     var lengthM: Double
+    /// Surface colours from the camera during the scan: slices.count × colorAngles, 0xRRGGBB.
+    var colors: [UInt32]?
+    var colorAngles: Int?
 
     var volume: Double { LogShape.volume(of: slices) }
 
@@ -64,7 +67,8 @@ struct LogShape: Codable, Hashable {
 /// Fits a LogShape to LiDAR mesh points, given the centres of the two end faces.
 enum LogShapeFitter {
 
-    static func fit(points: [SIMD3<Float>], endA: SIMD3<Float>, endB: SIMD3<Float>, expectedRadius: Double?) -> LogShape? {
+    static func fit(points: [SIMD3<Float>], endA: SIMD3<Float>, endB: SIMD3<Float>, expectedRadius: Double?,
+                    colorSamples: [(p: SIMD3<Float>, rgb: UInt32)] = []) -> LogShape? {
         let a = SIMD3<Double>(Double(endA.x), Double(endA.y), Double(endA.z))
         let b = SIMD3<Double>(Double(endB.x), Double(endB.y), Double(endB.z))
         let axis = b - a
@@ -140,7 +144,62 @@ enum LogShapeFitter {
         if let last = slices.last {
             slices.append(LogSlice(z: length, cx: last.cx, cy: last.cy, r: last.r))
         }
-        return LogShape(slices: slices, source: .scan, lengthM: length)
+        var shape = LogShape(slices: slices, source: .scan, lengthM: length)
+        if !colorSamples.isEmpty {
+            let angles = 40
+            var sums = [SIMD3<Double>](repeating: .zero, count: slices.count * angles)
+            var counts = [Int](repeating: 0, count: slices.count * angles)
+            for sample in colorSamples {
+                let d = SIMD3<Double>(Double(sample.p.x), Double(sample.p.y), Double(sample.p.z)) - a
+                let z = simd_dot(d, w)
+                guard z >= 0, z <= length else { continue }
+                let x = simd_dot(d, u), y = simd_dot(d, v)
+                var si = 0
+                var best = Double.infinity
+                let guess = min(slices.count - 1, max(0, Int(z / length * Double(slices.count - 1))))
+                for j in max(0, guess - 2)...min(slices.count - 1, guess + 2) where abs(slices[j].z - z) < best {
+                    best = abs(slices[j].z - z)
+                    si = j
+                }
+                let sl = slices[si]
+                guard abs(hypot(x - sl.cx, y - sl.cy) - sl.r) < 0.05 else { continue }
+                var ang = atan2(y - sl.cy, x - sl.cx)
+                if ang < 0 { ang += 2 * Double.pi }
+                let ai = min(angles - 1, Int(ang / (2 * Double.pi) * Double(angles)))
+                let rgb = sample.rgb
+                sums[si * angles + ai] += SIMD3<Double>(Double((rgb >> 16) & 0xFF), Double((rgb >> 8) & 0xFF), Double(rgb & 0xFF))
+                counts[si * angles + ai] += 1
+            }
+            var colors = [UInt32](repeating: 0, count: slices.count * angles)
+            var filled = [Bool](repeating: false, count: slices.count * angles)
+            for i in 0..<colors.count where counts[i] > 0 {
+                let c = sums[i] / Double(counts[i])
+                colors[i] = (UInt32(c.x) << 16) | (UInt32(c.y) << 8) | UInt32(c.z)
+                filled[i] = true
+            }
+            if filled.contains(true) {
+                // Fill the gaps (the underside, unseen spots) from the nearest seen colour.
+                for _ in 0..<angles {
+                    var changed = false
+                    let snapshot = filled
+                    for si in 0..<slices.count {
+                        for ai in 0..<angles where !snapshot[si * angles + ai] {
+                            let neighbours = [(si, (ai + 1) % angles), (si, (ai + angles - 1) % angles),
+                                              (max(0, si - 1), ai), (min(slices.count - 1, si + 1), ai)]
+                            if let n = neighbours.first(where: { snapshot[$0.0 * angles + $0.1] }) {
+                                colors[si * angles + ai] = colors[n.0 * angles + n.1]
+                                filled[si * angles + ai] = true
+                                changed = true
+                            }
+                        }
+                    }
+                    if !changed { break }
+                }
+                shape.colors = colors
+                shape.colorAngles = angles
+            }
+        }
+        return shape
     }
 
     static func robustCircle(_ pts: [SIMD2<Double>], rRef: Double) -> (c: SIMD2<Double>, r: Double)? {
