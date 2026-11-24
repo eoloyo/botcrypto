@@ -295,6 +295,11 @@
     0.17
    ]
   },
+  "hy4": {
+   "ctx": 1048576,
+   "cost": "?",
+   "notes": "Tencent Hunyuan 4, 774B, served at BF16; vision; added 2026-11-24"
+  },
   "inkling-2-small": {
    "ctx": 1048576,
    "cost": "$$",
