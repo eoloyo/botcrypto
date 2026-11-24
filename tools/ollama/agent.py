@@ -30,6 +30,7 @@ import argparse, json, os, signal, subprocess, sys, threading, time
 from pathlib import Path
 import ask as A
 
+FORCE_EFFORT = None          # set by callers that must override every per-model default (e.g. bench.py --effort)
 READ_TOOLS = ["Read", "Glob", "Grep"]
 WRITE_TOOLS = ["Write", "Edit"]
 SAFE_BASH = ["Bash(ls:*)", "Bash(cat:*)", "Bash(go test:*)", "Bash(go build:*)", "Bash(go vet:*)", "Bash(gofmt:*)",
@@ -45,7 +46,8 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     The full transcript is kept in `log` (default: ~/.cache/ollama-cloud/transcripts/)."""
     model = model or A.ROLES["agent"]["models"][0]
     # never leave it to the harness default (see README); a model can override the role's level in models.json
-    effort = effort or A.MODELS.get(model, {}).get("effort") or A.ROLES["agent"].get("effort", "high")
+    # precedence: explicit argument > FORCE_EFFORT (set by bench.py --effort) > the model's own level > the role's level
+    effort = effort or FORCE_EFFORT or A.MODELS.get(model, {}).get("effort") or A.ROLES["agent"].get("effort", "high")
     cfg = A.STATE / "claude-config"
     home = A.STATE / "claude-home"
     for d in (cfg, home, A.STATE / "transcripts"):

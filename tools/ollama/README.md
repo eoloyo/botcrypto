@@ -51,7 +51,8 @@ Not worth using here: `kimi-k3` and `kimi-k3.1-pro` (same scores as the cheap mo
 both invented an answer); `minimax-m3` and `minimax-m3.1-flash` (too slow for long agent work);
 `gpt-oss:20b` (weakest reasoning). Exception: `mistral-large-4` is usable at **low** effort only (re-tested 2026-11-24:
 debug 17/17 in 36 s, long reviews 5 and 4); at high effort it overthinks and times out. `agent.py` applies a model's
-own effort setting from `models.json` automatically. Every model's verdict is in `models.json` under `best_use`.
+own effort setting from `models.json` automatically. `hy4` (Tencent, 774B, added 2026-11-24) is strong and honest (full
+marks on the short suite, long reviews 6 and 7) but slow and about 8x the price of `glm-5.3-flash` for similar results. Every model's verdict is in `models.json` under `best_use`.
 
 ## Limits (measured)
 

@@ -408,8 +408,8 @@ if __name__ == "__main__":
     p.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"], help="agent tests: reasoning effort (default: agent.py's)")
     p.add_argument("--update-models", action="store_true", help="report: write the results into models.json")
     a = p.parse_args()
-    if a.effort:                                  # applies to every agent run of this benchmark
-        A.ROLES["agent"]["effort"] = a.effort
+    if a.effort:                                  # applies to every agent run of this benchmark, over per-model defaults
+        G.FORCE_EFFORT = a.effort
     if a.include_expensive:
         os.environ["BENCH_INCLUDE_EXPENSIVE"] = "1"
     {"run": run, "investigate": investigate, "regrade": regrade, "report": report}[a.cmd](a)

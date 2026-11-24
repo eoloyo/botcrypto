@@ -297,8 +297,23 @@
   },
   "hy4": {
    "ctx": 1048576,
-   "cost": "?",
-   "notes": "Tencent Hunyuan 4, 774B, served at BF16; vision; added 2026-11-24"
+   "cost": "$$$$",
+   "notes": "Tencent Hunyuan 4, 774B, served at BF16; vision; added 2026-11-24",
+   "bench": {
+    "implement": 1,
+    "debug": "17/17",
+    "comprehend": "8/8",
+    "read": "4.0/4",
+    "honesty": 1,
+    "investigate": "6.0/10",
+    "investigate2": "7.0/10",
+    "suite_cost_pct": 4.34
+   },
+   "long_review_cost_pct": [
+    7.36,
+    8.24
+   ],
+   "best_use": "strong and honest (full marks on the short suite, long reviews 6 and 7) but slow (8-10 min per long review, close to the limit) and expensive: ~4.3% of a session for the short suite and ~8% per long review, about 8x glm-5.3-flash for similar results. Not worth it for routine work; tested 2026-11-24 at high effort."
   },
   "inkling-2-small": {
    "ctx": 1048576,
@@ -506,7 +521,7 @@
     "investigate2": "0/10",
     "suite_cost_pct": 1.34
    },
-   "best_use": "works as an agent only at LOW effort: it overthinks (30-40k characters of reasoning per step) and times out at high. Re-tested 2026-11-24: at low effort debug 17/17 in 36 s, long reviews 5 and 4 (~1% each), honest, 7/8 code reasoning, 4/4 reading. Mid-pack: the cheap flash models score as well or better.",
+   "best_use": "works as an agent only at LOW effort: it overthinks (30-40k characters of reasoning per step) and times out at high. Re-tested 2026-11-24: at low effort debug 17/17 in 36 s, long reviews 5 and 4 (~1% each), honest, 7/8 code reasoning, 4/4 reading. Medium effort scored no better on long reviews (4, 3.5) and was slower and dearer, so low stays the setting. Mid-pack: the cheap flash models score as well or better.",
    "effort": "low",
    "bench_2026_11_24": {
     "implement": 1,
@@ -523,6 +538,10 @@
     "investigate_high": [
      "no report",
      4.0
+    ],
+    "investigate_medium": [
+     4.0,
+     3.5
     ]
    }
   },
