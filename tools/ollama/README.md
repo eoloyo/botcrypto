@@ -48,8 +48,10 @@ API key: in Claude cloud sessions on this environment the key is a saved network
 | Second opinion when it matters | `glm-5.3` | Fully consistent (7, 7), honest, 8/8; about 5x the price of the flash model for the same result |
 
 Not worth using here: `kimi-k3` and `kimi-k3.1-pro` (same scores as the cheap models at 10–30x the price, and
-both invented an answer); `mistral-large-4`, `minimax-m3` and `minimax-m3.1-flash` (too slow for long agent work);
-`gpt-oss:20b` (weakest reasoning). Every model's verdict is in `models.json` under `best_use`.
+both invented an answer); `minimax-m3` and `minimax-m3.1-flash` (too slow for long agent work);
+`gpt-oss:20b` (weakest reasoning). Exception: `mistral-large-4` is usable at **low** effort only (re-tested 2026-11-24:
+debug 17/17 in 36 s, long reviews 5 and 4); at high effort it overthinks and times out. `agent.py` applies a model's
+own effort setting from `models.json` automatically. Every model's verdict is in `models.json` under `best_use`.
 
 ## Limits (measured)
 
@@ -68,7 +70,8 @@ both invented an answer); `mistral-large-4`, `minimax-m3` and `minimax-m3.1-flas
 ## Writing a task for an agent
 
 - **Give it a test or a command that proves the result**, and check it yourself afterwards.
-- **Set the effort.** `agent.py` always passes one (`--effort`, default high). The benchmark above ran at the
+- **Set the effort.** `agent.py` always passes one (`--effort`, default high; some models have their own level in
+  `models.json`, e.g. `mistral-large-4` runs at low because it overthinks). The benchmark above ran at the
   harness default, which for the main models behaves like "low": on a test question `deepseek-v4.1-flash` was wrong
   at default and low, right at medium and above. `gemma4:31b` does not reason in this harness at any level.
 - **State a budget** ("at most 60 tool calls; write the report after about 45"). Without one, five models ran

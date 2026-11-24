@@ -44,7 +44,8 @@ def run(task, workdir, model=None, write=False, read_only=False, allow=(), timeo
     (an agent that keeps re-sending a huge context can otherwise burn 10%+ of a session in minutes).
     The full transcript is kept in `log` (default: ~/.cache/ollama-cloud/transcripts/)."""
     model = model or A.ROLES["agent"]["models"][0]
-    effort = effort or A.ROLES["agent"].get("effort", "high")   # never leave it to the harness default (see README)
+    # never leave it to the harness default (see README); a model can override the role's level in models.json
+    effort = effort or A.MODELS.get(model, {}).get("effort") or A.ROLES["agent"].get("effort", "high")
     cfg = A.STATE / "claude-config"
     home = A.STATE / "claude-home"
     for d in (cfg, home, A.STATE / "transcripts"):
